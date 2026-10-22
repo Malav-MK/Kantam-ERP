@@ -151,8 +151,7 @@ function Invoke-Restore([string]$BackupFile) {
             $src = Join-Path $x $d
             if (Test-Path $src) { Get-ChildItem -LiteralPath $src -Force | Copy-Item -Destination (Join-Path $DataDir $d) -Recurse -Force }
         }
-        Set-StrictAcl (Join-Path $DataDir 'keys') @("*$($KantamSids.LocalService):(OI)(CI)M")
-        Set-StrictAcl (Join-Path $DataDir 'media') @("*$($KantamSids.LocalService):(OI)(CI)M")
+        Set-KantamDataAcl $DataDir
         Invoke-Manage @('migrate', '--noinput')
         Invoke-Manage @('sync_rbac')
         $chain = Invoke-NativeCapture $VenvPython @((Join-Path $AppBackend 'manage.py'), 'shell', '-c',
@@ -187,7 +186,7 @@ function Invoke-Reset {
     $env:KANTAM_OWNER_PASSWORD = Read-NewPassword '    New owner password'
     try { Invoke-Manage @('bootstrap', '--owner', 'owner', '--owner-name', 'Owner', '--password-env', 'KANTAM_OWNER_PASSWORD', '--device-name', "$env:COMPUTERNAME (server console)") }
     finally { Remove-Item Env:\KANTAM_OWNER_PASSWORD -ErrorAction SilentlyContinue }
-    Set-StrictAcl (Join-Path $DataDir 'keys') @("*$($KantamSids.LocalService):(OI)(CI)M")
+    Set-KantamDataAcl $DataDir
     Write-Step 'Starting services'
     foreach ($s in $KantamServices) { Start-KantamService $s }
     Show-Status
@@ -195,6 +194,7 @@ function Invoke-Reset {
 }
 
 Assert-Administrator
+Repair-KantamDataAccess $DataDir
 switch ($Command) {
     'status' { Show-Status }
     'start' { foreach ($s in Get-Targets) { Start-KantamService $s }; Start-Sleep 3; Show-Status }

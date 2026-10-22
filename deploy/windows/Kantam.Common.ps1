@@ -100,19 +100,65 @@ function Invoke-NativeCapture {
 }
 
 function Set-StrictAcl {
-    # Resets the folder (and, unless -NoRecurse, everything below it) to exactly:
-    # Administrators + SYSTEM full control, plus the extra grants given. Nothing inherited.
+    # Protects ONE folder: Administrators + SYSTEM full control plus the extra grants, nothing inherited
+    # from above. Everything inside is then reset to simply inherit from that folder, so no file can ever
+    # end up with an empty access list (which locks out even administrators).
     param([string]$Path, [string[]]$ExtraGrants = @(), [switch]$NoRecurse)
-    $tail = if ($NoRecurse) { @('/C', '/Q') } else { @('/T', '/C', '/Q') }
-    if (-not $NoRecurse) { & icacls.exe $Path /reset /T /C /Q | Out-Null }
     $grants = @("*$($KantamSids.Administrators):(OI)(CI)F", "*$($KantamSids.System):(OI)(CI)F") + $ExtraGrants
-    $icaclsArgs = @($Path, '/inheritance:r', '/grant:r') + $grants + $tail
-    & icacls.exe @icaclsArgs | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not set permissions on $Path" }
-    # Drop any explicit service-account entry left by an earlier run when none is wanted now.
+    # Grant first, then cut inheritance: the folder is never left without an administrator entry.
+    $r = Invoke-NativeCapture 'icacls.exe' (@($Path, '/grant:r') + $grants + @('/C', '/Q'))
+    if ($r.ExitCode -ne 0) { throw "Could not set permissions on ${Path}: $($r.Output -join ' ')" }
+    $r = Invoke-NativeCapture 'icacls.exe' @($Path, '/inheritance:r', '/C', '/Q')
+    if ($r.ExitCode -ne 0) { throw "Could not set permissions on ${Path}: $($r.Output -join ' ')" }
     if (-not ($ExtraGrants -match [regex]::Escape($KantamSids.LocalService))) {
-        & icacls.exe $Path /remove:g "*$($KantamSids.LocalService)" @tail | Out-Null
+        Invoke-NativeCapture 'icacls.exe' @($Path, '/remove:g', "*$($KantamSids.LocalService)", '/C', '/Q') | Out-Null
     }
+    if (-not $NoRecurse -and (Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+        $r = Invoke-NativeCapture 'icacls.exe' @((Join-Path $Path '*'), '/reset', '/T', '/C', '/Q')
+        if ($r.ExitCode -ne 0) { throw "Could not reset permissions inside ${Path}: $($r.Output -join ' ')" }
+    }
+}
+
+function Set-KantamDataAcl([string]$DataDir) {
+    # LOCAL SERVICE (the service account) may read config and certificates, and write keys, media,
+    # logs and run state. backups and admin are for administrators only.
+    $ls = $KantamSids.LocalService
+    foreach ($d in 'config', 'keys', 'media', 'logs', 'run', 'tls', 'backups', 'admin') {
+        New-Item -ItemType Directory -Force -Path (Join-Path $DataDir $d) | Out-Null
+    }
+    Set-StrictAcl $DataDir @("*${ls}:(RX)") -NoRecurse
+    foreach ($d in 'keys', 'media', 'logs', 'run') { Set-StrictAcl (Join-Path $DataDir $d) @("*${ls}:(OI)(CI)M") }
+    foreach ($d in 'config', 'tls') { Set-StrictAcl (Join-Path $DataDir $d) @("*${ls}:(OI)(CI)RX") }
+    foreach ($d in 'backups', 'admin') { Set-StrictAcl (Join-Path $DataDir $d) @() }
+}
+
+function Test-KantamDataAccess([string]$DataDir) {
+    # True when an administrator can list every folder and open every file. A file that is merely
+    # in use (e.g. a log held by a running service) is not a permission problem.
+    try { $items = @(Get-ChildItem -LiteralPath $DataDir -Recurse -Force -ErrorAction Stop) } catch { return $false }
+    foreach ($f in ($items | Where-Object { -not $_.PSIsContainer })) {
+        try { [IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite').Dispose() }
+        catch {
+            $e = $_.Exception
+            while ($e.InnerException) { $e = $e.InnerException }
+            # Windows sharing/lock violations (HRESULT 0x80070020 / 0x80070021) mean "in use", which is fine.
+            $inUse = ($e -is [IO.IOException]) -and (($e.HResult -band 0xFFFF) -in @(32, 33))
+            if (-not $inUse) { return $false }
+        }
+    }
+    return $true
+}
+
+function Repair-KantamDataAccess([string]$DataDir) {
+    # Earlier installer versions could leave files in the data folder with an empty access list.
+    # Give ownership and full control back to Administrators only; Set-KantamDataAcl then tidies up.
+    if (-not (Test-Path -LiteralPath $DataDir) -or (Test-KantamDataAccess $DataDir)) { return }
+    Write-Note 'Repairing permissions on the data folder (left by an earlier installer version)...'
+    Invoke-NativeCapture 'takeown.exe' @('/F', $DataDir, '/R', '/A', '/D', 'Y') | Out-Null
+    Invoke-NativeCapture 'icacls.exe' @($DataDir, '/grant', "*$($KantamSids.Administrators):F", "*$($KantamSids.System):F", '/T', '/C', '/Q') | Out-Null
+    Invoke-NativeCapture 'icacls.exe' @($DataDir, '/grant', "*$($KantamSids.Administrators):(OI)(CI)F", '/C', '/Q') | Out-Null
+    if (Test-KantamDataAccess $DataDir) { Write-Ok 'Data folder permissions repaired.' }
+    else { Write-Note "Some files in $DataDir are still not readable (possibly in use). Continuing." }
 }
 
 function Get-KantamTask([string]$Service) {

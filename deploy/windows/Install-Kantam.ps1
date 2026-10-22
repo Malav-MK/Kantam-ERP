@@ -43,9 +43,12 @@ if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'PowerShell 5.1 or later is r
 if (-not (Test-Path (Join-Path $SourceRoot 'backend\manage.py'))) { throw "Application source not found next to this script ($SourceRoot)." }
 Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
 
+# Repair a data folder left unreadable by an earlier installer version, then lock it down *before*
+# any secret is written (ProgramData is readable by all users by default).
+Repair-KantamDataAccess $DataDir
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+Set-KantamDataAcl $DataDir
 $LogDir = Join-Path $DataDir 'logs'
-New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $transcript = Join-Path $LogDir ("install-{0:yyyyMMdd-HHmmss}.log" -f (Get-Date))
 Start-Transcript -Path $transcript | Out-Null
 
@@ -198,7 +201,6 @@ try {
     $cfg['PG_BIN'] = $pgBin
     $cfg['KANTAM_HOSTNAME'] = $HostName
 
-    foreach ($d in 'config', 'keys', 'media', 'logs', 'run', 'tls', 'backups', 'admin') { New-Item -ItemType Directory -Force -Path (Join-Path $DataDir $d) | Out-Null }
     Write-KantamEnv $EnvFile $cfg
     Write-Ok "Approved networks: $($cfg['ZT_ALLOWED_CIDRS'])"
 
@@ -313,11 +315,7 @@ try {
     # ------------------------------------------------------------------ permissions
     Write-Step 'Locking down file permissions'
     # Program Files already allows administrators to write and everyone else (including LOCAL SERVICE) only to read.
-    $ls = $KantamSids.LocalService
-    Set-StrictAcl $DataDir @("*${ls}:(RX)") -NoRecurse
-    foreach ($d in 'keys', 'media', 'logs', 'run') { Set-StrictAcl (Join-Path $DataDir $d) @("*${ls}:(OI)(CI)M") }
-    foreach ($d in 'config', 'tls') { Set-StrictAcl (Join-Path $DataDir $d) @("*${ls}:(OI)(CI)RX") }
-    foreach ($d in 'backups', 'admin') { Set-StrictAcl (Join-Path $DataDir $d) @() }
+    Set-KantamDataAcl $DataDir
     Write-Ok 'Service account (LOCAL SERVICE) can read the program and config, and write only keys, media, logs and run state.'
 
     # ------------------------------------------------------------------ migrate + first run
@@ -354,8 +352,8 @@ try {
             Invoke-Checked $venvPython @($manage, 'sync_rbac') 'Refreshing roles and approval policies'
         }
     } finally { Pop-Location }
-    # Keys created just now by the administrator must stay readable by the service account.
-    Set-StrictAcl (Join-Path $DataDir 'keys') @("*$($KantamSids.LocalService):(OI)(CI)M")
+    # Files created just now (signing keys) inherit the folder rules; re-apply once more to be certain.
+    Set-KantamDataAcl $DataDir
 
     # ------------------------------------------------------------------ services
     Write-Step 'Registering auto-start services'
