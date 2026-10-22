@@ -170,6 +170,17 @@ function Repair-KantamDataAccess([string]$DataDir) {
     else { Write-Note "Some files in $DataDir are still not readable (possibly in use). Continuing." }
 }
 
+function Copy-FileWithRetry([string]$Source, [string]$Destination, [int]$Attempts = 15) {
+    # Antivirus (e.g. Windows Defender) briefly locks newly written .exe files while scanning them.
+    for ($i = 1; ; $i++) {
+        try { Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop; return }
+        catch {
+            if ($i -ge $Attempts) { throw "Could not copy $Source to $Destination after $Attempts attempts: $($_.Exception.Message)" }
+            Start-Sleep -Seconds 2
+        }
+    }
+}
+
 function Get-KantamServiceName([string]$Service) { "KantamERP-$Service" }
 
 function Get-KantamService([string]$Service) {

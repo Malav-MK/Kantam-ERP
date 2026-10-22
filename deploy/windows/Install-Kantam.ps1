@@ -418,10 +418,12 @@ try {
         $oldProgress = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
         try { Invoke-WebRequest -Uri $WinSwUrl -OutFile $tmp -UseBasicParsing } finally { $ProgressPreference = $oldProgress }
         if ((Get-FileHash -LiteralPath $tmp -Algorithm SHA256).Hash -ne $WinSwSha256) {
-            Remove-Item -LiteralPath $tmp -Force
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
             throw 'The downloaded service wrapper does not match its expected checksum. Not installing it.'
         }
-        Move-Item -LiteralPath $tmp -Destination $winsw -Force
+        Copy-FileWithRetry $tmp $winsw
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        if ((Get-FileHash -LiteralPath $winsw -Algorithm SHA256).Hash -ne $WinSwSha256) { throw 'The service wrapper changed while being copied. Not installing it.' }
     }
     $envFileForServices = Get-KantamEnvFile $DataDir
     $pgService = if ($PgHost -in @('localhost', '127.0.0.1', '::1')) { (Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Select-Object -First 1).Name } else { $null }
@@ -439,7 +441,7 @@ try {
         $id = Get-KantamServiceName $s
         $d = $defs[$s]
         $exeCopy = Join-Path $svcDir "$id.exe"
-        Copy-Item -LiteralPath $winsw -Destination $exeCopy -Force
+        Copy-FileWithRetry $winsw $exeCopy
         $xml = @(
             '<service>'
             "  <id>$id</id>"
