@@ -10,13 +10,21 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:ProgramFiles 'Kantam ERP'),
-    [string]$DataDir = (Join-Path $env:ProgramData 'Kantam ERP'),
+    [string]$InstallDir = '',
+    [string]$DataDir = '',
     [switch]$RemoveData
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Kantam.Common.ps1')
 Assert-Administrator
+if (-not $InstallDir) {
+    # Run from <InstallDir>\bin after installation; otherwise assume the default location.
+    $parent = Split-Path -Parent $PSScriptRoot
+    $InstallDir = if (Test-Path (Join-Path $parent 'app\backend')) { $parent } else { Join-Path $env:ProgramFiles 'Kantam ERP' }
+}
+if (-not $DataDir) { $DataDir = Get-KantamDataDir }
+Write-Host "Program folder: $InstallDir"
+Write-Host "Data folder   : $DataDir"
 
 $EnvFile = Get-KantamEnvFile $DataDir
 $cfg = Read-KantamEnv $EnvFile
@@ -60,6 +68,11 @@ Write-Ok "Removed $InstallDir"
 if ($RemoveData) {
     if (Test-Path -LiteralPath $DataDir) { Remove-Item -LiteralPath $DataDir -Recurse -Force }
     Write-Ok "Removed $DataDir"
+    $base = Split-Path -Parent $DataDir
+    if ((Split-Path -Leaf $DataDir) -eq 'Data' -and (Test-Path -LiteralPath $base) -and -not (Get-ChildItem -LiteralPath $base -Force)) {
+        Remove-Item -LiteralPath $base -Force
+        Write-Ok "Removed empty $base"
+    }
 } else {
     Write-Note "Data kept in $DataDir and the 'kantam' database. Reinstalling will reuse them."
 }

@@ -15,11 +15,14 @@
   .\Install-Kantam.ps1
   .\Install-Kantam.ps1 -AllowedCidrs 10.10.20.0/24,10.10.30.0/24 -HostName erp.kantam.local
   .\Install-Kantam.ps1 -Demo        # also loads illustrative demo data and demo users
+  .\Install-Kantam.ps1 -BaseDir "D:\Kantam ERP"   # program and data under one folder on another drive
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:ProgramFiles 'Kantam ERP'),
-    [string]$DataDir = (Join-Path $env:ProgramData 'Kantam ERP'),
+    # One folder for everything, e.g. "D:\Kantam ERP" -> <BaseDir>\Program and <BaseDir>\Data.
+    [string]$BaseDir = '',
+    [string]$InstallDir = '',
+    [string]$DataDir = '',
     [ValidateRange(1, 65535)][int]$Port = 443,
     [string]$HostName = $env:COMPUTERNAME,
     [string[]]$AllowedCidrs = @(),
@@ -38,10 +41,33 @@ $PackageDir = $PSScriptRoot
 $SourceRoot = (Resolve-Path (Join-Path $PackageDir '..\..')).Path
 . (Join-Path $PackageDir 'Kantam.Common.ps1')
 
+if ($BaseDir) {
+    $BaseDir = [IO.Path]::GetFullPath($BaseDir).TrimEnd('\')
+    if (-not $InstallDir) { $InstallDir = Join-Path $BaseDir 'Program' }
+    if (-not $DataDir) { $DataDir = Join-Path $BaseDir 'Data' }
+}
+if (-not $InstallDir) { $InstallDir = Join-Path $env:ProgramFiles 'Kantam ERP' }
+if (-not $DataDir) { $DataDir = Join-Path $env:ProgramData 'Kantam ERP' }
+$InstallDir = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
+$DataDir = [IO.Path]::GetFullPath($DataDir).TrimEnd('\')
+
 Assert-Administrator
 if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'PowerShell 5.1 or later is required.' }
 if (-not (Test-Path (Join-Path $SourceRoot 'backend\manage.py'))) { throw "Application source not found next to this script ($SourceRoot)." }
 Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+
+foreach ($dir in @($InstallDir, $DataDir)) {
+    $drive = [IO.Path]::GetPathRoot($dir)
+    if (-not (Test-Path -LiteralPath $drive)) { throw "Drive $drive does not exist." }
+    $fs = (Get-Volume -DriveLetter $drive.Substring(0, 1) -ErrorAction SilentlyContinue).FileSystem
+    if ($fs -and $fs -ne 'NTFS' -and $fs -ne 'ReFS') { throw "Drive $drive uses $fs. Kantam ERP needs an NTFS drive (file permissions protect the secrets)." }
+}
+if ($BaseDir) {
+    # Folders outside Program Files / ProgramData inherit loose drive-root permissions
+    # (any signed-in user may modify). Protect the base folder first.
+    New-Item -ItemType Directory -Force -Path $BaseDir | Out-Null
+    Set-StrictAcl $BaseDir @("*$($KantamSids.LocalService):(RX)") -NoRecurse
+}
 
 # Repair a data folder left unreadable by an earlier installer version, then lock it down *before*
 # any secret is written (ProgramData is readable by all users by default).
@@ -212,6 +238,24 @@ try {
         Write-Note "PostgreSQL was installed. Its superuser password is saved in $secretFile (administrators only). Move it to your password safe."
     }
     if (-not $pgSuperPassword) {
+        # An earlier (possibly failed) run may have installed PostgreSQL and saved its password.
+        foreach ($candidate in @((Join-Path $DataDir 'admin\postgres-superuser.txt'), (Join-Path $env:ProgramData 'Kantam ERP\admin\postgres-superuser.txt'))) {
+            if (-not $pgSuperPassword -and (Test-Path -LiteralPath (Split-Path $candidate))) {
+                Repair-KantamDataAccess (Split-Path (Split-Path $candidate))
+                if (Test-Path -LiteralPath $candidate) {
+                    $m = [regex]::Match((Get-Content -LiteralPath $candidate -Raw), 'password: (\S+)')
+                    if ($m.Success) {
+                        $pgSuperPassword = $m.Groups[1].Value
+                        Write-Ok "Using the PostgreSQL superuser password saved by the earlier installation ($candidate)."
+                        if ($candidate -ne (Join-Path $DataDir 'admin\postgres-superuser.txt')) {
+                            Copy-Item -LiteralPath $candidate -Destination (Join-Path $DataDir 'admin') -Force
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (-not $pgSuperPassword) {
         if ($Unattended) { throw 'Set KANTAM_PG_SUPERPASSWORD for an unattended install against an existing PostgreSQL server.' }
         $pgSuperPassword = ConvertFrom-SecureStringPlain (Read-Host -AsSecureString "    Password of the existing PostgreSQL superuser '$PgSuperUser'")
     }
@@ -244,6 +288,11 @@ try {
 
     Write-Step 'Copying application files'
     $AppDir = Join-Path $InstallDir 'app'
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    if (-not $InstallDir.StartsWith($env:ProgramFiles, [StringComparison]::OrdinalIgnoreCase)) {
+        # Program Files is already writable only by administrators; any other folder must be made so.
+        Set-StrictAcl $InstallDir @("*$($KantamSids.LocalService):(OI)(CI)RX")
+    }
     New-Item -ItemType Directory -Force -Path $AppDir, (Join-Path $InstallDir 'bin') | Out-Null
     foreach ($part in 'backend', 'frontend', 'gateway', 'docs') {
         & robocopy.exe (Join-Path $SourceRoot $part) (Join-Path $AppDir $part) /MIR /NFL /NDL /NJH /NJS /NP `
@@ -253,6 +302,8 @@ try {
     foreach ($f in 'Kantam.Common.ps1', 'Run-KantamService.ps1', 'KantamAdmin.ps1', 'Uninstall-Kantam.ps1') {
         Copy-Item -LiteralPath (Join-Path $PackageDir $f) -Destination (Join-Path $InstallDir 'bin') -Force
     }
+    # Lets KantamAdmin.ps1 / Uninstall-Kantam.ps1 find the data folder when it is not the default.
+    Set-Content -LiteralPath (Join-Path $InstallDir 'bin\datadir.txt') -Value $DataDir -Encoding ASCII
     Copy-Item -LiteralPath (Join-Path $SourceRoot 'README.md') -Destination $InstallDir -Force
     Write-Ok "Installed to $AppDir"
 

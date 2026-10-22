@@ -37,12 +37,26 @@ Installation takes about 10–20 minutes, depending on download speed.
 
 | Option | Example | Meaning |
 |---|---|---|
+| `-BaseDir` | `-BaseDir "D:\Kantam ERP"` | Put everything on another drive: the program in `D:\Kantam ERP\Program` and data in `D:\Kantam ERP\Data`. The drive must be NTFS. PostgreSQL itself stays in its normal location on C: |
 | `-AllowedCidrs` | `-AllowedCidrs 10.10.20.0/24,10.10.30.0/24` | Approved plant networks (skips the question) |
 | `-HostName` | `-HostName erp.kantam.local` | Name people type in the browser (goes into the certificate) |
 | `-Port` | `-Port 8443` | Use this if port 443 is already taken (e.g. by IIS) |
 | `-CertPfx` | `-CertPfx C:\certs\erp.pfx` | Use your own company certificate instead of a self-signed one |
 | `-Demo` | `-Demo` | Also load sample data and demo users (for training, not production) |
 | `-PgHost` | `-PgHost 10.10.20.9` | Use an existing PostgreSQL server (you'll be asked for its superuser password) |
+
+### Installing on drive D: (or any other drive)
+
+Open **PowerShell as administrator** and run:
+
+```powershell
+cd C:\Users\<you>\Downloads\Kantam-ERP-main\deploy\windows
+powershell -ExecutionPolicy Bypass -File .\Install-Kantam.ps1 -BaseDir "D:\Kantam ERP"
+```
+
+With `-BaseDir`, the paths in the rest of this guide change:
+- `C:\Program Files\Kantam ERP` becomes `D:\Kantam ERP\Program`.
+- `C:\ProgramData\Kantam ERP` becomes `D:\Kantam ERP\Data`.
 
 ## 3. Let the other PCs and tablets in
 

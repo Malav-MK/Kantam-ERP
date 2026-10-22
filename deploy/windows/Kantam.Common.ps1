@@ -27,6 +27,12 @@ function Get-AccountName([string]$Sid) {
 
 function Get-KantamDataDir {
     if ($env:KANTAM_DATA_DIR) { return $env:KANTAM_DATA_DIR }
+    # The installer records a non-default data folder next to the installed scripts.
+    $pointer = Join-Path $PSScriptRoot 'datadir.txt'
+    if (Test-Path -LiteralPath $pointer) {
+        $d = (Get-Content -LiteralPath $pointer | Select-Object -First 1).Trim()
+        if ($d) { return $d }
+    }
     return (Join-Path $env:ProgramData 'Kantam ERP')
 }
 
