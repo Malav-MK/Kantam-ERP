@@ -194,8 +194,9 @@ function Start-KantamService([string]$Service) {
 function Test-KantamHealth([int]$Port, [int]$TimeoutSeconds = 90) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
-        $code = & curl.exe -k -s -o NUL -w '%{http_code}' --max-time 5 "https://localhost:$Port/healthz" 2>$null
-        if ($code -eq '200') { return $true }
+        # The gateway answers /healthz on its own; keyLoaded=true proves it has also reached the backend.
+        $r = Invoke-NativeCapture 'curl.exe' @('-k', '-s', '--max-time', '5', "https://localhost:$Port/healthz")
+        if ($r.ExitCode -eq 0 -and (($r.Output -join '') -match '"keyLoaded"\s*:\s*true')) { return $true }
         Start-Sleep -Seconds 3
     }
     return $false
