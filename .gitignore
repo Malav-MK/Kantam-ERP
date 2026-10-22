@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.sqlite3
+backend/keys/
+backend/protected_media/
+deploy/.env
+deploy/tls/
+# local / OS files
+.DS_Store
+*.log
+*.pyc
+# secrets and runtime data - never commit
+.env
+*.pem
+*.pfx
+*.kbak
+backend/kantam_dev.sqlite3
+# build artefacts
+*.zip

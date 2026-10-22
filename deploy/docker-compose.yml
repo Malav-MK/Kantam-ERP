@@ -1,0 +1,83 @@
+# Factory-server deployment. Only the gateway publishes a port; the database
+# and Django live on an internal network with no route from the plant LAN.
+name: kantam-erp
+
+networks:
+  edge: {}                 # plant LAN -> gateway
+  app: { internal: true }  # gateway -> backend -> db (no external access)
+
+volumes:
+  pgdata: {}
+  appdata: {}   # signing keys + protected evidence files
+
+x-backend-env: &backend-env
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set in .env}
+  DJANGO_ALLOWED_HOSTS: backend,localhost
+  POSTGRES_DB: kantam
+  POSTGRES_USER: kantam
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+  POSTGRES_HOST: db
+  POSTGRES_SSLMODE: disable   # traffic never leaves the internal docker network
+  ZT_GATEWAY_SECRET: ${ZT_GATEWAY_SECRET:?set in .env}
+  ZT_ALLOWED_CIDRS: ${ZT_ALLOWED_CIDRS:?set in .env}
+  ZT_REQUIRE_DEVICE: "true"
+  ZT_COOKIE_SECURE: "true"
+  TZ: Asia/Kolkata
+
+services:
+  db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    networks: [app]
+    environment:
+      POSTGRES_DB: kantam
+      POSTGRES_USER: kantam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kantam -d kantam"]
+      interval: 10s
+      retries: 10
+
+  backend:
+    build: { context: ../backend }
+    restart: unless-stopped
+    networks: [app]
+    depends_on: { db: { condition: service_healthy } }
+    environment: *backend-env
+    volumes: [appdata:/data]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+  worker:
+    build: { context: ../backend }
+    restart: unless-stopped
+    networks: [app]
+    depends_on: [backend]
+    environment: *backend-env
+    volumes: [appdata:/data]
+    command: ["python", "manage.py", "run_worker"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+  gateway:
+    build: { context: .., dockerfile: gateway/Dockerfile }
+    restart: unless-stopped
+    networks: [edge, app]
+    depends_on: [backend]
+    ports: ["${GATEWAY_BIND:-0.0.0.0}:443:8443"]
+    environment:
+      BACKEND_URL: http://backend:8000
+      ZT_GATEWAY_SECRET: ${ZT_GATEWAY_SECRET:?set in .env}
+      ZT_ALLOWED_CIDRS: ${ZT_ALLOWED_CIDRS:?set in .env}
+      ZT_REQUIRE_DEVICE: "true"
+      TLS_CERT_FILE: /tls/server.crt
+      TLS_KEY_FILE: /tls/server.key
+    volumes: ["${TLS_DIR:-./tls}:/tls:ro"]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]

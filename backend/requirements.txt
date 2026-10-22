@@ -1,0 +1,10 @@
+Django==5.2.17
+djangorestframework==3.17.2
+PyJWT[crypto]==2.15.0
+pyotp==2.9.0
+argon2-cffi==23.1.0
+Pillow==13.0.0
+psycopg[binary]==3.2.3
+gunicorn==23.0.0
+waitress==3.0.2
+tzdata==2025.2

@@ -1,0 +1,26 @@
+{
+  "name": "kantam-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zero-trust policy enforcement point for the Kantam ERP + CRM (network, device, token, rate-limit, headers, signed backend calls).",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "cookie-parser": "1.4.7",
+    "express": "4.22.3",
+    "express-rate-limit": "7.4.1",
+    "helmet": "8.0.0",
+    "ipaddr.js": "2.2.0",
+    "jose": "5.9.6"
+  },
+  "devDependencies": {
+    "supertest": "7.0.0"
+  }
+}

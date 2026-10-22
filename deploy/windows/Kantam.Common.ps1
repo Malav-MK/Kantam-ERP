@@ -1,0 +1,227 @@
+# Shared helpers for the Kantam ERP Windows scripts. Dot-source this file.
+# Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less files as ANSI.
+
+$script:KantamSids = @{
+    Administrators = 'S-1-5-32-544'
+    System         = 'S-1-5-18'
+    LocalService   = 'S-1-5-19'
+}
+$script:KantamServices = @('backend', 'worker', 'gateway')
+$script:KantamTaskPath = '\Kantam ERP\'
+
+function Write-Step([string]$Message) { Write-Host ''; Write-Host "==> $Message" -ForegroundColor Cyan }
+function Write-Ok([string]$Message) { Write-Host "    $Message" -ForegroundColor Green }
+function Write-Note([string]$Message) { Write-Host "    $Message" -ForegroundColor Yellow }
+
+function Assert-Administrator {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $p = New-Object Security.Principal.WindowsPrincipal($id)
+    if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'Run this script from an elevated PowerShell (Run as administrator).'
+    }
+}
+
+function Get-AccountName([string]$Sid) {
+    (New-Object Security.Principal.SecurityIdentifier($Sid)).Translate([Security.Principal.NTAccount]).Value
+}
+
+function Get-KantamDataDir {
+    if ($env:KANTAM_DATA_DIR) { return $env:KANTAM_DATA_DIR }
+    return (Join-Path $env:ProgramData 'Kantam ERP')
+}
+
+function Get-KantamEnvFile([string]$DataDir) { Join-Path $DataDir 'config\kantam.env' }
+
+function Read-KantamEnv([string]$Path) {
+    $values = [ordered]@{}
+    if (Test-Path -LiteralPath $Path) {
+        foreach ($line in Get-Content -LiteralPath $Path) {
+            if ($line -match '^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$') { $values[$matches[1]] = $matches[2] }
+        }
+    }
+    return $values
+}
+
+function Write-KantamEnv([string]$Path, $Values) {
+    $lines = @('# Kantam ERP runtime configuration. Contains secrets - readable by administrators and the service account only.')
+    foreach ($k in $Values.Keys) { $lines += "$k=$($Values[$k])" }
+    # ASCII without BOM so Python, Node and PowerShell all read it identically.
+    [IO.File]::WriteAllLines($Path, [string[]]$lines, (New-Object Text.ASCIIEncoding))
+}
+
+function Import-KantamEnv([string]$Path) {
+    $values = Read-KantamEnv $Path
+    if ($values.Count -eq 0) { throw "Configuration not found: $Path. Run Install-Kantam.ps1 first." }
+    foreach ($k in $values.Keys) { [Environment]::SetEnvironmentVariable($k, $values[$k], 'Process') }
+    return $values
+}
+
+function New-KantamSecret([int]$Bytes = 32) {
+    $buf = New-Object byte[] $Bytes
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($buf) } finally { $rng.Dispose() }
+    return (($buf | ForEach-Object { $_.ToString('x2') }) -join '')
+}
+
+function ConvertFrom-SecureStringPlain([Security.SecureString]$Secure) {
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+
+function Read-NewPassword([string]$Prompt, [int]$MinLength = 12) {
+    while ($true) {
+        $a = Read-Host -AsSecureString "$Prompt (min $MinLength characters)"
+        $b = Read-Host -AsSecureString 'Repeat'
+        $pa = ConvertFrom-SecureStringPlain $a
+        $pb = ConvertFrom-SecureStringPlain $b
+        if ($pa -ne $pb) { Write-Note 'The two entries do not match. Try again.'; continue }
+        if ($pa.Length -lt $MinLength) { Write-Note "Use at least $MinLength characters."; continue }
+        return $pa
+    }
+}
+
+function Invoke-Checked {
+    # Runs a native command, streams its output, and throws on a non-zero exit code.
+    param([string]$FilePath, [string[]]$Arguments, [string]$What)
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$What failed (exit code $LASTEXITCODE)." }
+}
+
+function Invoke-NativeCapture {
+    # Runs a native command and returns stdout+stderr as text lines. Windows PowerShell 5.1 turns
+    # redirected stderr into terminating errors under ErrorActionPreference=Stop, so relax it here.
+    param([string]$FilePath, [string[]]$Arguments)
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $lines = & $FilePath @Arguments 2>&1 | ForEach-Object { "$_" } }
+    finally { $ErrorActionPreference = $old }
+    return @{ ExitCode = $LASTEXITCODE; Output = @($lines) }
+}
+
+function Set-StrictAcl {
+    # Resets the folder (and, unless -NoRecurse, everything below it) to exactly:
+    # Administrators + SYSTEM full control, plus the extra grants given. Nothing inherited.
+    param([string]$Path, [string[]]$ExtraGrants = @(), [switch]$NoRecurse)
+    $tail = if ($NoRecurse) { @('/C', '/Q') } else { @('/T', '/C', '/Q') }
+    if (-not $NoRecurse) { & icacls.exe $Path /reset /T /C /Q | Out-Null }
+    $grants = @("*$($KantamSids.Administrators):(OI)(CI)F", "*$($KantamSids.System):(OI)(CI)F") + $ExtraGrants
+    $icaclsArgs = @($Path, '/inheritance:r', '/grant:r') + $grants + $tail
+    & icacls.exe @icaclsArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not set permissions on $Path" }
+    # Drop any explicit service-account entry left by an earlier run when none is wanted now.
+    if (-not ($ExtraGrants -match [regex]::Escape($KantamSids.LocalService))) {
+        & icacls.exe $Path /remove:g "*$($KantamSids.LocalService)" @tail | Out-Null
+    }
+}
+
+function Get-KantamTask([string]$Service) {
+    Get-ScheduledTask -TaskPath $KantamTaskPath -TaskName "Kantam ERP $Service" -ErrorAction SilentlyContinue
+}
+
+function Stop-KantamService([string]$Service, [string]$DataDir) {
+    $task = Get-KantamTask $Service
+    if ($task) { Stop-ScheduledTask -InputObject $task -ErrorAction SilentlyContinue }
+    # The runner records its child process; make sure nothing is left listening.
+    $pidFile = Join-Path $DataDir "run\$Service.pid"
+    if (Test-Path -LiteralPath $pidFile) {
+        $procId = (Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+        if ($procId -match '^\d+$' -and (Get-Process -Id ([int]$procId) -ErrorAction SilentlyContinue)) {
+            & taskkill.exe /PID $procId /T /F 2>&1 | Out-Null
+        }
+        Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Start-KantamService([string]$Service) {
+    $task = Get-KantamTask $Service
+    if (-not $task) { throw "Scheduled task for '$Service' not found. Re-run Install-Kantam.ps1." }
+    Start-ScheduledTask -InputObject $task
+}
+
+function Test-KantamHealth([int]$Port, [int]$TimeoutSeconds = 90) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $code = & curl.exe -k -s -o NUL -w '%{http_code}' --max-time 5 "https://localhost:$Port/healthz" 2>$null
+        if ($code -eq '200') { return $true }
+        Start-Sleep -Seconds 3
+    }
+    return $false
+}
+
+# ---- Backup encryption (AES-256-CBC + HMAC-SHA256, PBKDF2-SHA256 key derivation) ----
+$script:KbakMagic = [Text.Encoding]::ASCII.GetBytes('KBAK1')
+$script:KbakIterations = 600000
+
+function Get-KbakKeys([string]$Passphrase, [byte[]]$Salt) {
+    $kdf = [Security.Cryptography.Rfc2898DeriveBytes]::new($Passphrase, $Salt, $KbakIterations, [Security.Cryptography.HashAlgorithmName]::SHA256)
+    try { return @{ Enc = $kdf.GetBytes(32); Mac = $kdf.GetBytes(32) } } finally { $kdf.Dispose() }
+}
+
+function Protect-KantamFile([string]$InFile, [string]$OutFile, [string]$Passphrase) {
+    $salt = New-Object byte[] 16
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($salt); $rng.Dispose()
+    $keys = Get-KbakKeys $Passphrase $salt
+    $aes = [Security.Cryptography.Aes]::Create()
+    $aes.KeySize = 256; $aes.Mode = 'CBC'; $aes.Padding = 'PKCS7'; $aes.Key = $keys.Enc; $aes.GenerateIV()
+    $out = [IO.File]::Open($OutFile, 'Create', 'ReadWrite', 'None')
+    try {
+        $out.Write($KbakMagic, 0, $KbakMagic.Length); $out.Write($salt, 0, 16); $out.Write($aes.IV, 0, 16)
+        $crypto = [Security.Cryptography.CryptoStream]::new($out, $aes.CreateEncryptor(), [Security.Cryptography.CryptoStreamMode]::Write)
+        $in = [IO.File]::OpenRead($InFile)
+        try { $in.CopyTo($crypto); $crypto.FlushFinalBlock() } finally { $in.Dispose() }
+        # Encrypt-then-MAC over header + ciphertext.
+        $out.Position = 0
+        $hmac = [Security.Cryptography.HMACSHA256]::new([byte[]]$keys.Mac)
+        $tag = $hmac.ComputeHash($out)
+        $out.Position = $out.Length
+        $out.Write($tag, 0, $tag.Length)
+    } finally { $out.Dispose(); $aes.Dispose() }
+}
+
+function Unprotect-KantamFile([string]$InFile, [string]$OutFile, [string]$Passphrase) {
+    $in = [IO.File]::OpenRead($InFile)
+    try {
+        $header = New-Object byte[] 37
+        if ($in.Length -lt 85 -or $in.Read($header, 0, 37) -ne 37 -or [Text.Encoding]::ASCII.GetString($header, 0, 5) -ne 'KBAK1') {
+            throw 'Not a Kantam backup file.'
+        }
+        $salt = [byte[]]$header[5..20]; $iv = [byte[]]$header[21..36]
+        $keys = Get-KbakKeys $Passphrase $salt
+        $bodyLength = $in.Length - 32
+        $buf = New-Object byte[] 1048576
+
+        # 1. Verify the MAC before decrypting anything.
+        $hmac = [Security.Cryptography.HMACSHA256]::new([byte[]]$keys.Mac)
+        $in.Position = 0
+        $remaining = $bodyLength
+        while ($remaining -gt 0) {
+            $n = $in.Read($buf, 0, [int][Math]::Min($buf.Length, $remaining))
+            [void]$hmac.TransformBlock($buf, 0, $n, $null, 0); $remaining -= $n
+        }
+        [void]$hmac.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+        $tag = New-Object byte[] 32
+        [void]$in.Read($tag, 0, 32)
+        $diff = 0; for ($i = 0; $i -lt 32; $i++) { $diff = $diff -bor ($tag[$i] -bxor $hmac.Hash[$i]) }
+        if ($diff -ne 0) { throw 'Wrong passphrase or the backup file is damaged.' }
+
+        # 2. Stream-decrypt the ciphertext (between the header and the MAC).
+        $aes = [Security.Cryptography.Aes]::Create()
+        $aes.KeySize = 256; $aes.Mode = 'CBC'; $aes.Padding = 'PKCS7'; $aes.Key = $keys.Enc; $aes.IV = $iv
+        $dec = $aes.CreateDecryptor()
+        $out = [IO.File]::Create($OutFile)
+        try {
+            $in.Position = 37
+            $remaining = $bodyLength - 37
+            $outBuf = New-Object byte[] ($buf.Length + 16)
+            while ($remaining -gt 0) {
+                $n = $in.Read($buf, 0, [int][Math]::Min($buf.Length, $remaining)); $remaining -= $n
+                if ($remaining -gt 0) {
+                    $m = $dec.TransformBlock($buf, 0, $n, $outBuf, 0); $out.Write($outBuf, 0, $m)
+                } else {
+                    $last = $dec.TransformFinalBlock($buf, 0, $n); $out.Write($last, 0, $last.Length)
+                }
+            }
+        } finally { $out.Dispose(); $dec.Dispose(); $aes.Dispose() }
+    } finally { $in.Dispose() }
+}
