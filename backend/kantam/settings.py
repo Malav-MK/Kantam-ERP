@@ -11,6 +11,23 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_env_file(path):
+    """Windows services point KANTAM_ENV_FILE at the protected config file instead of carrying
+    secrets in their service definition. Real environment variables always win."""
+    if not path or not os.path.isfile(path):
+        return
+    with open(path, encoding="ascii") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_env_file(os.environ.get("KANTAM_ENV_FILE"))
+
+
 def env(name, default=None):
     return os.environ.get(name, default)
 

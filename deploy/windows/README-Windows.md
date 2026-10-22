@@ -104,7 +104,7 @@ Run all of these in PowerShell as administrator, from `C:\Program Files\Kantam E
 | Program | `C:\Program Files\Kantam ERP` (`app`, `venv`, `bin`) |
 | Data | `C:\ProgramData\Kantam ERP`: `config` (secrets), `keys` (token signing), `media` (photos/evidence), `logs`, `backups`, `tls` |
 | Database | PostgreSQL 16 on this machine, listening on **localhost only**. Database and login role `kantam` |
-| Services | Three tasks under *Task Scheduler → Kantam ERP*: **backend**, **worker** and **gateway**. They start at boot and restart automatically |
+| Services | Three Windows services, visible in `services.msc`: **KantamERP-backend**, **KantamERP-worker** and **KantamERP-gateway**. They start automatically at boot and Windows restarts them if they stop. They run through [WinSW](https://github.com/winsw/winsw) 2.12.0, which the installer downloads and checks against a pinned SHA-256 |
 | Service account | `LOCAL SERVICE` (low privilege). It can read the program and config, and write only keys, media, logs and run state |
 | Network | Only the gateway is reachable, on HTTPS port 443 (or `-Port`), and the firewall admits only the approved networks. The backend (127.0.0.1:8000) and the database are not reachable from the network |
 | Secrets | Generated randomly at install, stored in `config\kantam.env` (administrators and the service account only). The PostgreSQL superuser password, if the installer created it, is in `admin\postgres-superuser.txt`. Move it to your password safe and delete the file |
@@ -115,7 +115,7 @@ Run all of these in PowerShell as administrator, from `C:\Program Files\Kantam E
 |---|---|
 | Browser says "network not approved" | The device's IP isn't in the approved networks. Re-run the installer with `-AllowedCidrs …` |
 | Browser shows a certificate warning | Install `kantam-erp.cer` on that device (section 3) |
-| `status` shows a service not running | Run `.\KantamAdmin.ps1 logs backend` (or `gateway`/`worker`). The `*-runner.log` file shows restarts |
+| `status` shows a service not running | `status` prints the last errors itself. For more, run `.\KantamAdmin.ps1 logs backend` (or `gateway`/`worker`). The `*.wrapper.log` file shows starts and restarts |
 | Port 443 in use | Re-run with `-Port 8443` and use `https://server:8443` |
 | winget not found (older Windows Server) | Install Python 3.12 (for all users), Node.js LTS and PostgreSQL 16 manually, then re-run the installer with `-SkipPrerequisites` |
 | Forgot the owner password | Another administrator can reset it in the ERP (maker-checker applies). If there is none, use `reset` (this wipes all data) |

@@ -299,7 +299,7 @@ try {
             /XD .venv node_modules dist keys protected_media __pycache__ tests test .git /XF *.sqlite3 *.pyc .env | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Copying $part failed (robocopy exit code $LASTEXITCODE)." }
     }
-    foreach ($f in 'Kantam.Common.ps1', 'Run-KantamService.ps1', 'KantamAdmin.ps1', 'Uninstall-Kantam.ps1') {
+    foreach ($f in 'Kantam.Common.ps1', 'KantamAdmin.ps1', 'Uninstall-Kantam.ps1') {
         Copy-Item -LiteralPath (Join-Path $PackageDir $f) -Destination (Join-Path $InstallDir 'bin') -Force
     }
     # Lets KantamAdmin.ps1 / Uninstall-Kantam.ps1 find the data folder when it is not the default.
@@ -407,20 +407,73 @@ try {
     Set-KantamDataAcl $DataDir
 
     # ------------------------------------------------------------------ services
-    Write-Step 'Registering auto-start services'
-    $account = Get-AccountName $KantamSids.LocalService
-    $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType ServiceAccount -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
-        -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
-    $runner = Join-Path $InstallDir 'bin\Run-KantamService.ps1'
-    foreach ($s in $KantamServices) {
-        $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-            -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runner`" -Service $s -DataDir `"$DataDir`""
-        Register-ScheduledTask -TaskPath $KantamTaskPath -TaskName "Kantam ERP $s" -Action $action -Principal $principal -Settings $settings `
-            -Trigger (New-ScheduledTaskTrigger -AtStartup) -Description "Kantam ERP $s (supervised, restarts automatically)" -Force | Out-Null
+    Write-Step 'Installing Windows services'
+    $svcDir = Join-Path $InstallDir 'bin\services'
+    New-Item -ItemType Directory -Force -Path $svcDir | Out-Null
+    $winsw = Join-Path $svcDir 'WinSW.exe'
+    if (-not (Test-Path $winsw) -or (Get-FileHash -LiteralPath $winsw -Algorithm SHA256).Hash -ne $WinSwSha256) {
+        Write-Note 'Downloading the service wrapper (WinSW 2.12.0)...'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $tmp = Join-Path $env:TEMP 'WinSW-kantam.exe'
+        $oldProgress = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+        try { Invoke-WebRequest -Uri $WinSwUrl -OutFile $tmp -UseBasicParsing } finally { $ProgressPreference = $oldProgress }
+        if ((Get-FileHash -LiteralPath $tmp -Algorithm SHA256).Hash -ne $WinSwSha256) {
+            Remove-Item -LiteralPath $tmp -Force
+            throw 'The downloaded service wrapper does not match its expected checksum. Not installing it.'
+        }
+        Move-Item -LiteralPath $tmp -Destination $winsw -Force
     }
+    $envFileForServices = Get-KantamEnvFile $DataDir
+    $pgService = if ($PgHost -in @('localhost', '127.0.0.1', '::1')) { (Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Select-Object -First 1).Name } else { $null }
+    $defs = @{
+        backend = @{ Exe = $venvPython.Replace('python.exe', 'waitress-serve.exe'); Dir = (Join-Path $AppDir 'backend')
+                     Args = '--listen=127.0.0.1:8000 --threads=16 --channel-timeout=120 --ident=kantam kantam.wsgi:application'
+                     Desc = 'Kantam ERP application server (Django on 127.0.0.1:8000).'; Depend = $pgService }
+        worker  = @{ Exe = $venvPython; Dir = (Join-Path $AppDir 'backend'); Args = 'manage.py run_worker'
+                     Desc = 'Kantam ERP background jobs (reminders, PM schedule, shift auto-close).'; Depend = $pgService }
+        gateway = @{ Exe = $node; Dir = (Join-Path $AppDir 'gateway'); Args = 'src\server.js'
+                     Desc = 'Kantam ERP zero-trust gateway (HTTPS entry point).'; Depend = $null }
+    }
+    $esc = { param($v) [Security.SecurityElement]::Escape([string]$v) }
+    foreach ($s in $KantamServices) {
+        $id = Get-KantamServiceName $s
+        $d = $defs[$s]
+        $exeCopy = Join-Path $svcDir "$id.exe"
+        Copy-Item -LiteralPath $winsw -Destination $exeCopy -Force
+        $xml = @(
+            '<service>'
+            "  <id>$id</id>"
+            "  <name>Kantam ERP $s</name>"
+            "  <description>$(& $esc $d.Desc)</description>"
+            "  <executable>$(& $esc $d.Exe)</executable>"
+            "  <arguments>$(& $esc $d.Args)</arguments>"
+            "  <workingdirectory>$(& $esc $d.Dir)</workingdirectory>"
+            "  <env name=`"KANTAM_ENV_FILE`" value=`"$(& $esc $envFileForServices)`"/>"
+            '  <env name="PYTHONUNBUFFERED" value="1"/>'
+            '  <env name="PYTHONUTF8" value="1"/>'
+            '  <env name="PYTHONDONTWRITEBYTECODE" value="1"/>'
+            '  <startmode>Automatic</startmode>'
+            $(if ($d.Depend) { "  <depend>$($d.Depend)</depend>" })
+            '  <onfailure action="restart" delay="10 sec"/>'
+            '  <onfailure action="restart" delay="30 sec"/>'
+            '  <onfailure action="restart" delay="60 sec"/>'
+            '  <resetfailure>1 hour</resetfailure>'
+            '  <stoptimeout>15 sec</stoptimeout>'
+            "  <logpath>$(& $esc $LogDir)</logpath>"
+            '  <log mode="roll-by-size"><sizeThreshold>10240</sizeThreshold><keepFiles>8</keepFiles></log>'
+            '</service>'
+        ) | Where-Object { $_ }
+        [IO.File]::WriteAllLines((Join-Path $svcDir "$id.xml"), [string[]]$xml, (New-Object Text.UTF8Encoding($false)))
+        if (Get-KantamService $s) { Invoke-Checked $exeCopy @('refresh') "Updating service $id" }
+        else { Invoke-Checked $exeCopy @('install') "Installing service $id" }
+        # Run as the low-privilege built-in LOCAL SERVICE account.
+        $wmi = Get-CimInstance -ClassName Win32_Service -Filter "Name='$id'"
+        $rc = (Invoke-CimMethod -InputObject $wmi -MethodName Change -Arguments @{ StartName = 'NT AUTHORITY\LocalService'; StartPassword = '' }).ReturnValue
+        if ($rc -ne 0) { throw "Could not set the service account for $id (error $rc)." }
+    }
+    Remove-Item -LiteralPath (Join-Path $InstallDir 'bin\Run-KantamService.ps1') -Force -ErrorAction SilentlyContinue
     foreach ($s in $KantamServices) { Start-KantamService $s }
-    Write-Ok "Backend, worker and gateway start at boot as $account."
+    Write-Ok 'Services KantamERP-backend, KantamERP-worker and KantamERP-gateway installed (automatic start, run as LOCAL SERVICE, restart on failure).'
 
     Write-Step 'Configuring the Windows firewall'
     $ruleName = 'Kantam ERP (HTTPS)'
@@ -433,14 +486,20 @@ try {
     }
 
     Write-Step 'Checking that the ERP responds'
-    if (Test-KantamHealth $port 120) { Write-Ok 'Gateway and backend are up.' }
-    else { Write-Note "No response yet. Check the logs in $LogDir, or run: KantamAdmin.ps1 status" }
+    $healthy = Test-KantamHealth $port 120
+    if ($healthy) { Write-Ok 'Gateway and backend are up.' }
+    else {
+        Write-Host '    The ERP did not respond within 2 minutes. Service state and recent errors:' -ForegroundColor Red
+        Show-KantamServiceProblems $DataDir
+        Write-Note "Send the lines above (or the install log) for support. Logs: $LogDir"
+    }
 
     # ------------------------------------------------------------------ summary
     $url = if ($port -eq 443) { "https://$HostName" } else { "https://${HostName}:$port" }
     Write-Host ''
     Write-Host '------------------------------------------------------------------' -ForegroundColor White
-    Write-Host " Kantam ERP is installed:  $url" -ForegroundColor Green
+    if ($healthy) { Write-Host " Kantam ERP is installed and running:  $url" -ForegroundColor Green }
+    else { Write-Host " Kantam ERP is installed but NOT responding yet - see the errors above." -ForegroundColor Red }
     Write-Host '------------------------------------------------------------------' -ForegroundColor White
     if ($FirstInstall -and $bootstrapOutput) {
         $code = [regex]::Match($bootstrapOutput, 'shown once\): (\S+)').Groups[1].Value

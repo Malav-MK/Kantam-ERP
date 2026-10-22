@@ -7,7 +7,10 @@ $script:KantamSids = @{
     LocalService   = 'S-1-5-19'
 }
 $script:KantamServices = @('backend', 'worker', 'gateway')
-$script:KantamTaskPath = '\Kantam ERP\'
+$script:KantamTaskPath = '\Kantam ERP\'   # used only to clean up the scheduled tasks of older versions
+# WinSW (MIT licence) turns each process into a real Windows service. Pinned and hash-checked.
+$script:WinSwUrl = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW.NET461.exe'
+$script:WinSwSha256 = 'B5066B7BBDFBA1293E5D15CDA3CAAEA88FBEAB35BD5B38C41C913D492AADFC4F'
 
 function Write-Step([string]$Message) { Write-Host ''; Write-Host "==> $Message" -ForegroundColor Cyan }
 function Write-Ok([string]$Message) { Write-Host "    $Message" -ForegroundColor Green }
@@ -167,28 +170,59 @@ function Repair-KantamDataAccess([string]$DataDir) {
     else { Write-Note "Some files in $DataDir are still not readable (possibly in use). Continuing." }
 }
 
-function Get-KantamTask([string]$Service) {
-    Get-ScheduledTask -TaskPath $KantamTaskPath -TaskName "Kantam ERP $Service" -ErrorAction SilentlyContinue
+function Get-KantamServiceName([string]$Service) { "KantamERP-$Service" }
+
+function Get-KantamService([string]$Service) {
+    Get-Service -Name (Get-KantamServiceName $Service) -ErrorAction SilentlyContinue
 }
 
-function Stop-KantamService([string]$Service, [string]$DataDir) {
-    $task = Get-KantamTask $Service
-    if ($task) { Stop-ScheduledTask -InputObject $task -ErrorAction SilentlyContinue }
-    # The runner records its child process; make sure nothing is left listening.
+function Remove-LegacyKantamTask([string]$Service, [string]$DataDir) {
+    # Versions before the Windows-service switch used scheduled tasks plus a PowerShell runner.
+    $task = Get-ScheduledTask -TaskPath $KantamTaskPath -TaskName "Kantam ERP $Service" -ErrorAction SilentlyContinue
+    if ($task) {
+        Stop-ScheduledTask -InputObject $task -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction SilentlyContinue
+    }
     $pidFile = Join-Path $DataDir "run\$Service.pid"
     if (Test-Path -LiteralPath $pidFile) {
         $procId = (Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
         if ($procId -match '^\d+$' -and (Get-Process -Id ([int]$procId) -ErrorAction SilentlyContinue)) {
-            & taskkill.exe /PID $procId /T /F 2>&1 | Out-Null
+            Invoke-NativeCapture 'taskkill.exe' @('/PID', $procId, '/T', '/F') | Out-Null
         }
         Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
     }
 }
 
+function Stop-KantamService([string]$Service, [string]$DataDir) {
+    $svc = Get-KantamService $Service
+    if ($svc -and $svc.Status -ne 'Stopped') {
+        Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue
+        try { $svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30)) } catch { Write-Note "$($svc.Name) did not stop within 30 seconds." }
+    }
+    Remove-LegacyKantamTask $Service $DataDir
+}
+
 function Start-KantamService([string]$Service) {
-    $task = Get-KantamTask $Service
-    if (-not $task) { throw "Scheduled task for '$Service' not found. Re-run Install-Kantam.ps1." }
-    Start-ScheduledTask -InputObject $task
+    $svc = Get-KantamService $Service
+    if (-not $svc) { throw "Windows service '$(Get-KantamServiceName $Service)' not found. Re-run Install-Kantam.ps1." }
+    if ($svc.Status -ne 'Running') { Start-Service -Name $svc.Name }
+}
+
+function Show-KantamServiceProblems([string]$DataDir) {
+    # Printed when the ERP does not come up, so the cause is visible without hunting for logs.
+    foreach ($s in $KantamServices) {
+        $svc = Get-KantamService $s
+        Write-Host ("    {0,-22} {1}" -f (Get-KantamServiceName $s), $(if ($svc) { $svc.Status } else { 'NOT INSTALLED' })) -ForegroundColor Yellow
+    }
+    foreach ($s in $KantamServices) {
+        foreach ($kind in 'err', 'wrapper') {
+            $f = Join-Path $DataDir "logs\$(Get-KantamServiceName $s).$kind.log"
+            if ((Test-Path -LiteralPath $f) -and (Get-Item -LiteralPath $f).Length -gt 0) {
+                Write-Host "    --- $(Split-Path -Leaf $f) (last lines)" -ForegroundColor Yellow
+                Get-Content -LiteralPath $f -Tail 12 | ForEach-Object { Write-Host "    $_" }
+            }
+        }
+    }
 }
 
 function Test-KantamHealth([int]$Port, [int]$TimeoutSeconds = 90) {

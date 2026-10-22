@@ -56,17 +56,15 @@ function Show-Status {
     $cfg = Read-KantamEnv $EnvFile
     Write-Host ''
     foreach ($s in $KantamServices) {
-        $task = Get-KantamTask $s
-        $pidFile = Join-Path $DataDir "run\$s.pid"
-        $procId = if (Test-Path $pidFile) { Get-Content $pidFile | Select-Object -First 1 } else { '' }
-        $alive = $procId -match '^\d+$' -and (Get-Process -Id ([int]$procId) -ErrorAction SilentlyContinue)
-        $state = if (-not $task) { 'NOT REGISTERED' } elseif ($alive) { "running (pid $procId)" } else { "$($task.State)".ToLower() }
-        $color = if ($alive) { 'Green' } else { 'Yellow' }
+        $svc = Get-KantamService $s
+        $state = if (-not $svc) { 'NOT INSTALLED - re-run Install-Kantam.ps1' } else { "$($svc.Status)".ToLower() + "  ($($svc.StartType) start)" }
+        $color = if ($svc -and $svc.Status -eq 'Running') { 'Green' } else { 'Yellow' }
         Write-Host ("  {0,-8} {1}" -f $s, $state) -ForegroundColor $color
     }
     $port = if ($cfg['PORT']) { [int]$cfg['PORT'] } else { 443 }
-    $healthy = Test-KantamHealth $port 5
+    $healthy = Test-KantamHealth $port 10
     Write-Host ("  {0,-8} {1}" -f 'health', $(if ($healthy) { "OK  https://$($cfg['KANTAM_HOSTNAME']):$port" } else { 'not responding' })) -ForegroundColor $(if ($healthy) { 'Green' } else { 'Red' })
+    if (-not $healthy) { Show-KantamServiceProblems $DataDir }
     Write-Host ''
 }
 
@@ -206,7 +204,7 @@ switch ($Command) {
     }
     'logs' {
         $svc = if ($Target) { $Target } else { 'gateway' }
-        $files = Get-ChildItem -LiteralPath (Join-Path $DataDir 'logs') -Filter "$svc-*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 3
+        $files = Get-ChildItem -LiteralPath (Join-Path $DataDir 'logs') -Filter "$(Get-KantamServiceName $svc)*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 3
         foreach ($f in ($files | Sort-Object LastWriteTime)) { Write-Host "--- $($f.Name)" -ForegroundColor Cyan; Get-Content -LiteralPath $f.FullName -Tail $Tail }
     }
     'new-device' {

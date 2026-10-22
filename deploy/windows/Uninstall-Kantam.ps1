@@ -35,9 +35,11 @@ if ($RemoveData) {
 
 Write-Step 'Stopping and removing services'
 foreach ($s in $KantamServices) {
-    Stop-KantamService $s $DataDir
-    $task = Get-KantamTask $s
-    if ($task) { Unregister-ScheduledTask -InputObject $task -Confirm:$false }
+    Stop-KantamService $s $DataDir   # also removes scheduled tasks left by older versions
+    if (Get-KantamService $s) {
+        $exe = Join-Path $InstallDir "bin\services\$(Get-KantamServiceName $s).exe"
+        if (Test-Path -LiteralPath $exe) { & $exe uninstall | Out-Null } else { & sc.exe delete (Get-KantamServiceName $s) | Out-Null }
+    }
 }
 Write-Ok 'Services removed.'
 

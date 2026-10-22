@@ -1,8 +1,24 @@
+import fs from "node:fs";
 import path from "node:path";
 // Gateway configuration. Every security-relevant default is the restrictive one.
 const list = (v, d = "") => (v ?? d).split(",").map((s) => s.trim()).filter(Boolean);
 
-export function loadConfig(env = process.env) {
+// Windows services point KANTAM_ENV_FILE at the protected config file instead of carrying secrets
+// in their service definition. Real environment variables always win.
+export function readEnvFile(file) {
+  const out = {};
+  if (!file || !fs.existsSync(file)) return out;
+  for (const raw of fs.readFileSync(file, "ascii").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) continue;
+    const i = line.indexOf("=");
+    out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return out;
+}
+
+export function loadConfig(baseEnv = process.env) {
+  const env = { ...readEnvFile(baseEnv.KANTAM_ENV_FILE), ...baseEnv };
   const cfg = {
     port: Number(env.PORT || 8443),
     host: env.HOST || "0.0.0.0",

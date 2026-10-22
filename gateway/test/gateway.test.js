@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import request from "supertest";
 import { exportSPKI, generateKeyPair, SignJWT } from "jose";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createApp } from "../src/app.js";
+import { loadConfig } from "../src/config.js";
 import { signRequest, TokenVerifier, ipInRanges, parseCidrs } from "../src/policy.js";
 
 const SECRET = "x".repeat(40);
@@ -140,4 +144,13 @@ test("request bodies stream through unchanged and upstream failures fail closed"
   const down = createApp(cfg({ backendUrl: "http://127.0.0.1:9" }), verifier, quiet);
   const d = await request(down).get("/api/auth/device");
   assert.equal(d.status, 502);
+});
+
+test("settings can come from the protected env file; real environment wins", () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kt-")), "kantam.env");
+  fs.writeFileSync(file, "# comment\r\nZT_GATEWAY_SECRET=" + "s".repeat(40) + "\r\nPORT=9443\r\nHOST=127.0.0.1\r\n");
+  const cfg = loadConfig({ KANTAM_ENV_FILE: file, HOST: "0.0.0.0" });
+  assert.equal(cfg.gatewaySecret, "s".repeat(40));
+  assert.equal(cfg.port, 9443);
+  assert.equal(cfg.host, "0.0.0.0");
 });
