@@ -8,7 +8,7 @@ from django.utils import timezone
 from . import audit
 from .api import BusinessRuleError
 from .auth_views import new_enrollment_code
-from .models import ApprovalPolicy, ApprovalRequest, AuthSession, Department, Device, OutboxMessage, Role, User, UserRole
+from .models import ApprovalPolicy, ApprovalRequest, AuthSession, Department, Device, OutboxMessage, Role, Site, User, UserRole
 from .rbac import effective_permissions, has_perm, is_owner
 from .registry import Action, Resource, register
 
@@ -117,7 +117,7 @@ class UserAdminResource(Resource):
         _guard_target(request, obj)
         if not has_perm(request.user, "security.roles.manage"):
             raise BusinessRuleError("Role assignment requires security.roles.manage.", "not_authorised")
-        role = Role.objects.filter(code=data.get("role")).first()
+        role = Role.objects.filter(code=data.get("role"), deleted_at__isnull=True).first()
         if not role:
             raise BusinessRuleError("Unknown role.", "validation")
         if role.level == "owner" and not is_owner(request.user):
@@ -185,6 +185,32 @@ class UserAdminResource(Resource):
 
 
 @register
+class SiteResource(Resource):
+    key = "core.site"
+    model = Site
+    label = "Sites / plants"
+    singular = "Site"
+    module = "core"
+    title_field = "name"
+    permission_map = {"view": "core.department.view", "create": SEC_USERS, "update": SEC_USERS, "export": SEC_USERS}
+    list_fields = ["code", "name", "address"]
+    form_fields = ["name", "address"]
+    create_only_fields = ["code"]
+    search_fields = ["code", "name"]
+    ordering = ["name"]
+
+    def before_create(self, request, data):
+        from .models import Company
+        data["company"] = Company.objects.order_by("code").first()
+        if data["company"] is None:
+            raise BusinessRuleError("Run the installer first: no company is set up.", "invalid_state")
+
+
+def default_site(request):
+    return getattr(request.user, "site", None) or Site.objects.order_by("code").first()
+
+
+@register
 class DepartmentResource(Resource):
     key = "core.department"
     model = Department
@@ -193,10 +219,33 @@ class DepartmentResource(Resource):
     module = "core"
     title_field = "name"
     permission_map = {"create": SEC_USERS, "update": SEC_USERS, "export": SEC_USERS}
-    list_fields = ["code", "name", "site", "parent", "manager", "active"]
-    form_fields = ["code", "name", "site", "parent", "manager", "active"]
+    list_fields = ["code", "name", "parent", "manager", "site", "active"]
+    form_fields = ["name", "parent", "manager", "site", "active"]
+    create_only_fields = ["code"]
+    filter_fields = ["active", "site", "parent"]
     search_fields = ["code", "name"]
     ordering = ["name"]
+    field_help = {
+        "code": "Short code, e.g. STORE or PROD. It cannot be changed later.",
+        "parent": "Optional: the larger department this team belongs to.",
+        "manager": "Department head. Sees the department's tasks and approvals.",
+        "site": "Leave empty for the main plant.",
+        "active": "Untick instead of deleting: a department used in past records is kept for history.",
+    }
+    help = {
+        "why": "Departments are picked on users, role grants (department scope), tasks, gate staff and inward material.",
+        "steps": "Add a department here, then choose it on a user (Administration → Users) or when granting a role.",
+    }
+
+    def before_create(self, request, data):
+        data["code"] = str(data.get("code") or "").strip().upper()
+        if not data.get("site"):
+            data["site"] = default_site(request)
+            if data["site"] is None:
+                raise BusinessRuleError("Add a site first (Administration → Sites / plants).", "validation")
+
+    def extra_detail(self, request, obj):
+        return {"members": obj.members.filter(is_active=True).count()}
 
 
 @register
@@ -215,12 +264,18 @@ class RoleResource(Resource):
     ordering = ["level", "name"]
     help = {
         "steps": "Open a role and tick View / Add / Edit / Delete / Approve / Export for each module or record type, then save with a reason.",
-        "boundary": "The owner role always has full access and cannot be changed. You cannot grant permissions you do not hold yourself.",
+        "boundary": "The owner role always has full access and cannot be changed or deleted. Only the owner can delete roles, "
+                    "and only once no user holds them. You cannot grant permissions you do not hold yourself.",
     }
+
+    def scope(self, request, qs):
+        return qs.filter(deleted_at__isnull=True)
 
     def before_create(self, request, data):
         if data.get("level") == "owner" and not is_owner(request.user):
             raise BusinessRuleError("Only an owner can create an owner-level role.", "privilege_escalation")
+        if Role.objects.filter(code=data.get("code"), deleted_at__isnull=False).exists():
+            raise BusinessRuleError("That code belonged to a deleted built-in role. Choose another code.", "validation")
 
     def after_update(self, request, obj, changes):
         if changes and obj.is_system and not obj.customized:
@@ -284,7 +339,32 @@ class RoleResource(Resource):
                      changes={"added": sorted(codes - before), "removed": sorted(before - codes)}, reason=data.get("reason", ""))
         return obj
 
+    def _delete_role(request, obj, data):
+        if not is_owner(request.user):
+            raise BusinessRuleError("Only the owner can delete roles.", "not_authorised")
+        if obj.code == "owner" or obj.level == "owner":
+            raise BusinessRuleError("The owner role cannot be deleted.", "invalid_state")
+        holders = list(User.objects.filter(role_grants__role=obj).distinct().order_by("full_name").values_list("full_name", flat=True))
+        if holders:
+            names = ", ".join(holders[:10]) + (f" and {len(holders) - 10} more" if len(holders) > 10 else "")
+            raise BusinessRuleError(f"{len(holders)} user(s) still have this role: {names}. Revoke it from them first (Users → Revoke role).",
+                                    "role_in_use", {"users": holders})
+        label = f"{obj.name} ({obj.code})"
+        audit.record("role_deleted", "core.role", obj, changes={"permissions": sorted(obj.permissions.values_list("code", flat=True)),
+                                                               "built_in": obj.is_system}, reason=data.get("reason", ""))
+        if obj.is_system:
+            # Kept as a hidden row so upgrades do not recreate it.
+            obj.permissions.clear()
+            obj.deleted_at = timezone.now()
+            obj.save(update_fields=["deleted_at"])
+        else:
+            obj.delete()
+        return {"ok": True, "message": f"Role {label} deleted."}
+
     actions = [
+        Action("delete_role", "Delete role", _delete_role, permission="security.roles.manage", reason_required=True, tone="danger",
+               confirm="Delete this role? This cannot be undone from the screen.",
+               available=lambda o, r: o.code != "owner" and o.level != "owner" and is_owner(r.user)),
         Action("set_permissions", "Save permissions", _set_permissions, permission="security.roles.manage", reason_required=True,
                available=lambda o, r: o.code != "owner",
                fields=[{"name": "permissions", "label": "Permission codes", "type": "multiselect", "source": "permissions"}]),

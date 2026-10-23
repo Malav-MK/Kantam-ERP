@@ -102,7 +102,7 @@ class LookupView(APIView):
 
     def get(self, request, source):
         if source == "roles":
-            return Response([{"value": r.code, "label": f"{r.name} ({r.level})"} for r in Role.objects.order_by("level", "name")])
+            return Response([{"value": r.code, "label": f"{r.name} ({r.level})"} for r in Role.objects.filter(deleted_at__isnull=True).order_by("level", "name")])
         if source == "permissions":
             return Response([{"value": p.code, "label": f"{p.code} - {p.description}", "module": p.module} for p in Permission.objects.order_by("code")])
         return Response([])

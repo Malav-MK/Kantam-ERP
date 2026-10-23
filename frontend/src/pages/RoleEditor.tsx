@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, get, newIdempotencyKey } from "../api";
+import { useAuth } from "../auth";
 import Icon from "../components/Icon";
 import { ErrorBox } from "../components/ui";
 
@@ -29,6 +30,9 @@ function TriCheck({ state, disabled, title, onChange }: { state: State; disabled
 
 export function RoleEditor() {
   const { id } = useParams();
+  const nav = useNavigate();
+  const { profile } = useAuth();
+  const isOwner = !!profile?.levels.includes("owner");
   const [role, setRole] = useState<Role | null>(null);
   const [matrix, setMatrix] = useState<Matrix | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -119,6 +123,20 @@ export function RoleEditor() {
     }
   }
 
+  async function deleteRole() {
+    if (!role) return;
+    if (reason.trim().length < 5) { setError("Enter a reason (at least 5 characters) before deleting."); return; }
+    if (!window.confirm(`Delete the role "${role.name}"? People must not hold it any more. This cannot be undone from the screen.`)) return;
+    setBusy(true); setError("");
+    try {
+      await api("POST", `/api/r/core.role/${role.id}/actions/delete_role`, { reason }, { idempotencyKey: newIdempotencyKey() });
+      nav("/r/core.role");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+      setBusy(false);
+    }
+  }
+
   if (!role || !matrix) return <div className="page"><ErrorBox error={error} />{!error && <p className="muted">Loading…</p>}</div>;
   const cols = matrix.columns;
 
@@ -134,6 +152,8 @@ export function RoleEditor() {
         </div>
         {!readOnly && (
           <div className="row gap">
+            {isOwner && <button type="button" className="btn danger" disabled={busy} onClick={deleteRole}
+              title={role._extra.users ? "Revoke this role from its users first" : "Delete this role"}><Icon name="trash" size={16} />Delete role</button>}
             {role.is_system && role.customized && <button type="button" className="btn" disabled={busy} onClick={resetDefault}>Reset to built-in default</button>}
             <button className="btn primary" disabled={busy || reason.trim().length < 5 || (!dirty && details.name === role.name && details.description === (role.description ?? ""))}>
               Save changes
@@ -151,6 +171,9 @@ export function RoleEditor() {
             <label className="field"><span>Description</span><input value={details.description} onChange={(e) => setDetails({ ...details, description: e.target.value })} /></label>
             <label className="field span2"><span>Reason for this change (recorded in history)<b className="req">*</b></span>
               <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Stores staff now also record physical counts" /></label>
+            {isOwner && role._extra.users > 0 && (
+              <p className="small muted span2">{role._extra.users} user(s) hold this role. Revoke it from them (Administration → Users → Revoke role) before deleting it.</p>
+            )}
           </div>
           {dirty && <div className="small muted">{added.length} permission(s) to add, {removed.length} to remove.</div>}
         </div>

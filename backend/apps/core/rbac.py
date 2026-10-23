@@ -152,6 +152,8 @@ def sync_roles_from_matrix():
     all_codes = set(Permission.objects.values_list("code", flat=True))
     for code, spec in ROLES.items():
         role = Role.objects.filter(code=code).first()
+        if role is not None and role.deleted_at is not None and spec["level"] != "owner":
+            continue  # deleted by the owner: stays deleted across upgrades
         if role is None:
             role = Role.objects.create(code=code, name=spec["name"], level=spec["level"], description=spec["description"], is_system=True)
         elif role.customized and spec["level"] != "owner":

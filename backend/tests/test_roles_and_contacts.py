@@ -84,3 +84,44 @@ class NoEmailTests(PlantTestCase):
         msg = OutboxMessage.objects.get(source_id=po["id"])
         self.assertEqual((msg.channel, msg.recipient, msg.status), ("whatsapp", "+919800000000", "draft"))
         self.assertEqual(PurchaseOrder.objects.get(pk=po["id"]).status, "sent")
+
+
+class RoleDeleteAndDepartmentTests(PlantTestCase):
+    def test_owner_deletes_built_in_role_and_upgrade_keeps_it_deleted(self):
+        owner = self.client_for(self.owner)
+        role = Role.objects.get(code="tv_viewer")
+        blocked = owner.post(f"/api/r/core.role/{role.pk}/actions/delete_role", {"reason": "Not used here"})
+        self.assertEqual(blocked.json()["error"], "role_in_use")  # the tv user still holds it
+        self.tv.role_grants.all().delete()
+        r = owner.post(f"/api/r/core.role/{role.pk}/actions/delete_role", {"reason": "Not used here"})
+        self.assertEqual(r.status_code, 200, r.content)
+        sync_permissions()  # what an upgrade does
+        role.refresh_from_db()
+        self.assertIsNotNone(role.deleted_at)
+        self.assertEqual(role.permissions.count(), 0)
+        owner = self.client_for(self.owner)
+        codes = [x["code"] for x in owner.get("/api/r/core.role", page_size=100).json()["results"]]
+        self.assertNotIn("tv_viewer", codes)
+        owner_role = Role.objects.get(code="owner")
+        self.assertIn(owner.post(f"/api/r/core.role/{owner_role.pk}/actions/delete_role", {"reason": "Try it"}).status_code, (403, 409))
+
+    def test_only_owner_deletes_roles(self):
+        custom = Role.objects.create(code="temp", name="Temp", level="staff")
+        it1 = make_user("itadm2", ["it_admin"], "IT")
+        r = self.client_for(it1).post(f"/api/r/core.role/{custom.pk}/actions/delete_role", {"reason": "Cleanup"})
+        self.assertIn(r.status_code, (403, 409))
+        r = self.client_for(self.owner).post(f"/api/r/core.role/{custom.pk}/actions/delete_role", {"reason": "Cleanup"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertFalse(Role.objects.filter(code="temp").exists())
+
+    def test_create_department_without_choosing_a_site(self):
+        owner = self.client_for(self.owner)
+        r = owner.post("/api/r/core.department", {"code": "pack", "name": "Packing"})
+        self.assertEqual(r.status_code, 201, r.content)
+        from apps.core.models import Department
+        dept = Department.objects.get(code="PACK")
+        self.assertEqual(dept.site.code, "BAREJA")
+        u = owner.post("/api/r/core.user", {"username": "packer1", "full_name": "Packer One", "department": str(dept.pk)})
+        self.assertEqual(u.status_code, 201, u.content)
+        meta = owner.get("/api/r/core.department/meta").json()
+        self.assertEqual(meta["fields"]["site"]["target"], "core.site")

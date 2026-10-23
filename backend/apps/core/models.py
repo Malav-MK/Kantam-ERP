@@ -41,7 +41,8 @@ class Site(models.Model):
 
 class Department(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name="departments")
+    site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name="departments", blank=True,
+                             help_text="Left empty, the department is created at the plant site")
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=120)
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="teams")
@@ -133,6 +134,7 @@ class Role(models.Model):
     permissions = models.ManyToManyField(Permission, blank=True, related_name="roles")
     is_system = models.BooleanField(default=False)
     customized = models.BooleanField(default=False, help_text="A built-in role edited in the app; upgrades keep its permissions")
+    deleted_at = models.DateTimeField(null=True, blank=True, help_text="Built-in role deleted by the owner; upgrades do not bring it back")
 
     def __str__(self):
         return self.name
