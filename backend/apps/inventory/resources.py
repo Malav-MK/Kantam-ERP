@@ -263,7 +263,45 @@ def _current_stock_summary(request, obj, data):
     return {k: str(v) for k, v in s.items()} | {"item": item.code, "uom": item.stock_uom}
 
 
+def _opening_stock(request, obj, data):
+    """Stock that was already on the shelf before the ERP went live. Creates a lot and an 'opening' movement."""
+    item = _get(Item, data.get("item"), "item", request)
+    loc = _get(Location, data.get("location"), "location", request)
+    if loc.is_virtual or loc.kind == "machine_side":
+        raise BusinessRuleError("Opening stock goes into a physical store location (warehouse, label store, FG, QC hold).", "invalid_move")
+    try:
+        qty = Decimal(str(data.get("qty")))
+    except Exception:
+        raise BusinessRuleError("Enter the quantity as a number.", "invalid_qty")
+    if qty <= 0:
+        raise BusinessRuleError("Quantity must be more than zero.", "invalid_qty")
+    state = data.get("quality_state") or "released"
+    if state not in {"released", "pending", "held"}:
+        raise BusinessRuleError("Choose released, awaiting QC or QC hold.", "invalid_state")
+    lot_fields = {k: str(data.get(k) or "").strip()[:n] for k, n in (("supplier_lot", 80), ("flavour", 80), ("notes", 300)) if data.get(k)}
+    if data.get("artwork"):
+        from apps.core.resource_api import scoped_get
+        lot_fields["artwork"] = scoped_get(request, "masters.artwork", data["artwork"], "artwork")
+    lot = services.post_opening_balance(item=item, qty=qty, location=loc, user=request.user, quality_state=state, **lot_fields)
+    return {"ok": True, "lot": lot.doc_no, "message": f"Opening stock posted: {qty} {item.stock_uom} of {item.code} at {loc.code} (lot {lot.doc_no})."}
+
+
+OPENING_FIELDS = [
+    {"name": "item", "label": "Item", "type": "fk", "target": "masters.item", "required": True, "filter": {"active": "true"}},
+    {"name": "location", "label": "Store location", "type": "fk", "target": "masters.location", "required": True,
+     "filter": {"kind": "warehouse,label_store,fg,qc_hold,dispatch", "active": "true"}},
+    {"name": "qty", "label": "Quantity (in the item's stock unit)", "type": "decimal", "required": True},
+    {"name": "quality_state", "label": "Quality", "type": "choice", "choices": [
+        {"value": "released", "label": "Released / usable"}, {"value": "pending", "label": "Awaiting QC"}, {"value": "held", "label": "QC hold"}]},
+    {"name": "supplier_lot", "label": "Supplier lot / batch no.", "type": "text"},
+    {"name": "artwork", "label": "Artwork (labels only)", "type": "fk", "target": "masters.artwork"},
+    {"name": "flavour", "label": "Flavour (if any)", "type": "text"},
+    {"name": "notes", "label": "Remarks", "type": "text"},
+]
+
 StockBalanceResource.actions = [
+    Action("opening_stock", "Add opening stock", _opening_stock, permission="inventory.stockbalance.opening_stock", detail=False,
+           tone="primary", reason_required=True, fields=OPENING_FIELDS),
     Action("summary", "Balance summary", _current_stock_summary, permission="inventory.stockbalance.view", detail=False,
            fields=[{"name": "item", "label": "Item", "type": "fk", "target": "masters.item", "required": True}]),
 ]

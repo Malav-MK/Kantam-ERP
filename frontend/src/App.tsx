@@ -7,6 +7,7 @@ import { AuditLog, GateBoard, MachineBoard, MyWork, OwnerDashboard, PlanningBoar
 import { ResourceDetail, ResourceList } from "./pages/ResourcePages";
 import { ApprovalDetail, ApprovalsInbox } from "./pages/Approvals";
 import { RoleEditor } from "./pages/RoleEditor";
+import { StockInventory } from "./pages/Inventory";
 import { ForcedPasswordChange, RequirePerm } from "./components/Guard";
 
 function Routed() {
@@ -26,6 +27,7 @@ function Routed() {
         <Route path="machines" element={<RequirePerm any={["dashboard.owner.view", "dashboard.department.view"]}><MachineBoard /></RequirePerm>} />
         <Route path="planning-board" element={<RequirePerm any={["planning.planline.view"]}><PlanningBoard /></RequirePerm>} />
         <Route path="stores" element={<RequirePerm any={["inventory.stockmove.view"]}><StoresDaily /></RequirePerm>} />
+        <Route path="inventory" element={<RequirePerm any={["inventory.stockbalance.view"]}><StockInventory /></RequirePerm>} />
         <Route path="shortages" element={<RequirePerm any={["purchase.requisition.view", "dashboard.owner.view", "planning.planline.view"]}><Shortages /></RequirePerm>} />
         <Route path="gate" element={<RequirePerm any={["dashboard.gate.view"]}><GateBoard /></RequirePerm>} />
         <Route path="trace" element={<RequirePerm any={["inventory.lot.view"]}><Trace /></RequirePerm>} />

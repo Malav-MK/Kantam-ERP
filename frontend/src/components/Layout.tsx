@@ -25,6 +25,7 @@ const BOARDS: NavItem[] = [
   { to: "/dashboard", label: "Owner overview", perm: ["dashboard.owner.view"], icon: "dashboard" },
   { to: "/machines", label: "Machine board", perm: ["dashboard.owner.view", "dashboard.department.view"], icon: "machine" },
   { to: "/planning-board", label: "Planning board", perm: ["planning.planline.view"], icon: "calendar" },
+  { to: "/inventory", label: "Stock inventory", perm: ["inventory.stockbalance.view"], icon: "boxes" },
   { to: "/stores", label: "Stores daily", perm: ["inventory.stockmove.view"], icon: "boxes" },
   { to: "/shortages", label: "Shortages", perm: ["purchase.requisition.view", "dashboard.owner.view", "planning.planline.view"], icon: "alert" },
   { to: "/gate", label: "Gate & muster", perm: ["dashboard.gate.view"], icon: "shield" },

@@ -45,6 +45,14 @@ class StoresDaily(APIView):
         return Response(services.stores_daily(d, s if s in {"day", "night"} else None))
 
 
+class StockInventory(APIView):
+    required_permission = "inventory.stockbalance.view"
+
+    def get(self, request):
+        from apps.inventory.services import stock_overview
+        return Response(stock_overview(include_value=has_perm(request.user, "commercial.cost.view")))
+
+
 class Shortages(APIView):
     required_permission = ["purchase.requisition.view", "dashboard.owner.view", "planning.planline.view"]
 

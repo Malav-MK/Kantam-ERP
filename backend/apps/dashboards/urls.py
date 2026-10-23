@@ -8,6 +8,7 @@ urlpatterns = [
     path("tv", views.TvView.as_view()),
     path("gate", views.GateOverview.as_view()),
     path("stores", views.StoresDaily.as_view()),
+    path("inventory", views.StockInventory.as_view()),
     path("shortages", views.Shortages.as_view()),
     path("planning", views.PlanningBoard.as_view()),
     path("labels", views.LabelStore.as_view()),

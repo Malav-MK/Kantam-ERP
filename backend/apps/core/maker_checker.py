@@ -308,6 +308,7 @@ DEFAULT_POLICIES = [
     ("Item standard cost change", "masters.item", "update", "", "fields_changed", ["standard_cost"], None, "commercial.cost.view", 1),
     ("Recipe approval", "masters.recipe", "action", "approve", "always", [], None, "masters.recipe.approve", 1),
     # Operations
+    ("Opening stock entry", "inventory.stockbalance", "action", "opening_stock", "always", [], None, "inventory.adjust.approve", 1),
     ("Stock movement reversal", "inventory.stockmove", "action", "reverse", "always", [], None, "inventory.adjust.approve", 1),
     ("Closed-shift production correction", "production.productionreport", "action", "correct", "always", [], None, "production.correct_closed", 1),
     ("Cancel sales order", "sales.salesorder", "action", "cancel", "always", [], None, "sales.so.approve_amendment", 1),

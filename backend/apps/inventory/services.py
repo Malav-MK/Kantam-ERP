@@ -9,7 +9,7 @@ posting either fully commits or not at all (brief p.4).
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.utils import timezone
 
 from apps.core import audit
@@ -375,3 +375,73 @@ def post_opening_balance(*, item, qty, location, user, quality_state="released",
                              ref={"resource": "inventory.opening", "id": "", "doc": "OPENING"}, **lot_fields)
     audit.record("opening_balance", "inventory.lot", lot, changes={"qty": str(qty), "location": location.code})
     return lot
+
+
+def stock_overview(*, include_value=False):
+    """Item-wise stock position for the inventory screen: the same buckets as balance_summary,
+    computed for every active item in a handful of grouped queries."""
+    from apps.purchase.models import POLine
+
+    buckets = {}
+    rows = (StockBalance.objects.filter(qty__gt=0)
+            .values("item_id", "location__kind", "lot__quality_state").annotate(total=Sum("qty")))
+    for r in rows:
+        b = buckets.setdefault(r["item_id"], {"on_hand": Decimal("0"), "usable": Decimal("0"), "pending_qc": Decimal("0"),
+                                              "held": Decimal("0"), "machine_side": Decimal("0")})
+        kind, state, total = r["location__kind"], r["lot__quality_state"], r["total"]
+        if kind == "machine_side":
+            b["machine_side"] += total
+            continue
+        if kind in STORAGE_EXCLUDED_FROM_USABLE and kind != "qc_hold":
+            continue
+        b["on_hand"] += total
+        if state == "released" and kind not in STORAGE_EXCLUDED_FROM_USABLE:
+            b["usable"] += total
+        elif state == "pending":
+            b["pending_qc"] += total
+        else:
+            b["held"] += total
+    reserved = {}
+    for r in Reservation.objects.filter(status="active").values("item_id").annotate(q=Sum("qty"), c=Sum("consumed_qty")):
+        reserved[r["item_id"]] = (r["q"] or 0) - (r["c"] or 0)
+    incoming = {}
+    for line in POLine.objects.filter(status__in=["open", "partial"], po__status__in=["approved", "sent", "partial"]).only(
+            "item_id", "qty", "accepted_qty"):
+        incoming[line.item_id] = incoming.get(line.item_id, Decimal("0")) + D(line.balance_qty)
+    locations = {r["item_id"]: r["n"] for r in StockBalance.objects.filter(qty__gt=0).exclude(location__kind__in=STORAGE_EXCLUDED_FROM_USABLE - {"qc_hold"})
+                 .values("item_id").annotate(n=Count("location", distinct=True))}
+
+    zero = {"on_hand": Decimal("0"), "usable": Decimal("0"), "pending_qc": Decimal("0"), "held": Decimal("0"), "machine_side": Decimal("0")}
+    kinds = dict(Item.KINDS)
+    out, totals = [], {"items": 0, "in_stock": 0, "low": 0, "out": 0, "value": Decimal("0")}
+    for item in Item.objects.filter(active=True).order_by("kind", "code"):
+        b = buckets.get(item.id, zero)
+        res = D(reserved.get(item.id, 0))
+        available = b["usable"] - res
+        floor = max(item.min_stock, item.safety_stock)
+        if floor > 0 and available <= 0:
+            status = "out"
+        elif floor > 0 and available < floor:
+            status = "low"
+        elif b["on_hand"] > 0 or b["machine_side"] > 0:
+            status = "ok"
+        else:
+            status = "none"
+        row = {
+            "id": str(item.pk), "code": item.code, "name": item.name, "kind": item.kind, "kind_label": kinds.get(item.kind, item.kind),
+            "group": item.group, "uom": item.stock_uom, "min_stock": str(D(item.min_stock)), "safety_stock": str(D(item.safety_stock)),
+            "on_hand": str(D(b["on_hand"])), "usable": str(D(b["usable"])), "pending_qc": str(D(b["pending_qc"])), "held": str(D(b["held"])),
+            "reserved": str(res), "available": str(D(available)), "machine_side": str(D(b["machine_side"])),
+            "incoming": str(D(incoming.get(item.id, 0))), "locations": locations.get(item.id, 0), "status": status,
+        }
+        if include_value:
+            value = D(b["on_hand"] * item.standard_cost)
+            row["value"] = str(value.quantize(Decimal("0.01")))
+            totals["value"] += value
+        totals["items"] += 1
+        totals["in_stock"] += 1 if b["on_hand"] > 0 else 0
+        totals["low"] += 1 if status == "low" else 0
+        totals["out"] += 1 if status == "out" else 0
+        out.append(row)
+    totals["value"] = str(totals["value"].quantize(Decimal("0.01"))) if include_value else None
+    return {"generated_at": timezone.now(), "totals": totals, "rows": out}
