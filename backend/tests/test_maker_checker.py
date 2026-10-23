@@ -75,15 +75,14 @@ class MakerCheckerTests(PlantTestCase):
     def test_two_level_approval_needs_distinct_checkers(self):
         ApprovalPolicy.objects.filter(resource="inventory.stockmove").update(required_approvals=2)
         move = self._move()
-        store_mgr2 = make_user("storemgr2", ["qc_manager"], "QC")
-        maker = self.client_for(self.owner)
-        r = maker.post(f"/api/r/inventory.stockmove/{move.pk}/actions/reverse", {"reason": "Posted to wrong bin"})
+        Permission = __import__("apps.core.models", fromlist=["Permission"]).Permission
+        Role.objects.get(code="store_manager").permissions.add(*Permission.objects.filter(code="inventory.adjust.approve"))
+        maker_user = make_user("invmaker", ["store_manager"], "STORE")
+        mgr = make_user("invapprover", ["store_manager"], "STORE")
+        store_mgr2 = make_user("storemgr2", ["store_manager"], "STORE")
+        r = self.client_for(maker_user).post(f"/api/r/inventory.stockmove/{move.pk}/actions/reverse", {"reason": "Posted to wrong bin"})
         self.assertEqual(r.status_code, 202, r.content)
         aid = r.json()["approval"]
-        mgr = make_user("invapprover", ["store_manager"], "STORE")
-        Role.objects.get(code="store_manager").permissions.add(*__import__("apps.core.models", fromlist=["Permission"]).Permission.objects.filter(code="inventory.adjust.approve"))
-        mgr.bump_role_version()
-        UserRole.objects.create(user=store_mgr2, role=Role.objects.get(code="store_manager"))
         c1 = self.client_for(mgr)
         self.assertEqual(c1.post(f"/api/r/core.approvalrequest/{aid}/actions/approve").json()["status"], "pending")
         again = c1.post(f"/api/r/core.approvalrequest/{aid}/actions/approve")  # same checker twice does not count
@@ -92,6 +91,26 @@ class MakerCheckerTests(PlantTestCase):
         self.assertFalse(StockMove.objects.filter(reversal_of=move).exists())
         self.assertEqual(self.client_for(store_mgr2).post(f"/api/r/core.approvalrequest/{aid}/actions/approve").json()["status"], "approved")
         self.assertTrue(StockMove.objects.filter(reversal_of=move).exists())
+
+    def test_owner_is_super_admin_without_maker_checker(self):
+        owner = self.client_for(self.owner)
+        # Policy-controlled action: applied at once, no pending request.
+        move = self._move()
+        r = owner.post(f"/api/r/inventory.stockmove/{move.pk}/actions/reverse", {"reason": "Posted to wrong bin"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(StockMove.objects.filter(reversal_of=move).exists())
+        self.assertFalse(ApprovalRequest.objects.filter(status="pending").exists())
+        # Role grant (normally four-eyes) is immediate for the owner.
+        r = owner.post(f"/api/r/core.user/{self.target.pk}/actions/grant_role", {"role": "store_staff", "reason": "New joiner in stores"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(UserRole.objects.filter(user=self.target, role__code="store_staff").exists())
+        # Built-in self-approval rule: the owner may approve a PO they created.
+        po = owner.post("/api/r/purchase.purchaseorder", {"supplier": str(self.supplier.pk)}).json()
+        owner.post("/api/r/purchase.poline", {"po": po["id"], "item": str(self.pp.pk), "qty": 5, "rate": "1", "promised_date": "2026-12-01"})
+        owner.post(f"/api/r/purchase.purchaseorder/{po['id']}/actions/submit")
+        self.assertEqual(owner.post(f"/api/r/purchase.purchaseorder/{po['id']}/actions/approve").status_code, 200)
+        # Every change is still in the audit trail under the owner's name.
+        self.assertTrue(AuditLog.objects.filter(actor=self.owner, action="role_granted").exists())
 
     def test_maker_losing_permission_blocks_execution(self):
         maker = self.client_for(self.it1)

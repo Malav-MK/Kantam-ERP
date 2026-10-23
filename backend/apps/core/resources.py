@@ -59,9 +59,9 @@ class UserAdminResource(Resource):
     permission_map = {"view": SEC_USERS, "create": SEC_USERS, "update": SEC_USERS, "export": SEC_USERS}
     list_fields = ["username", "full_name", "department", "job_title", "is_active", "mfa_enabled", "locked_until", "last_login"]
     create_only_fields = ["username"]
-    form_fields = ["full_name", "email", "phone", "site", "department", "reporting_manager", "job_title", "is_active", "active_from", "active_until", "preferred_language"]
+    form_fields = ["full_name", "phone", "site", "department", "reporting_manager", "job_title", "is_active", "active_from", "active_until", "preferred_language"]
     readonly_fields = ["mfa_enabled", "failed_logins", "role_version", "created_at"]
-    search_fields = ["username", "full_name", "email"]
+    search_fields = ["username", "full_name"]
     filter_fields = ["department", "is_active"]
     ordering = ["full_name"]
     field_help = {"username": "Personal login name. Department passwords are never shared (brief p.27)."}
@@ -208,31 +208,89 @@ class RoleResource(Resource):
     module = "core"
     title_field = "name"
     permission_map = {"view": "security.roles.manage", "create": "security.roles.manage", "update": "security.roles.manage", "export": "security.roles.manage"}
-    list_fields = ["code", "name", "level", "is_system"]
+    list_fields = ["name", "code", "level", "is_system", "customized"]
     form_fields = ["name", "description"]
     create_only_fields = ["code", "level"]
+    readonly_fields = ["is_system", "customized"]
     ordering = ["level", "name"]
+    help = {
+        "steps": "Open a role and tick View / Add / Edit / Delete / Approve / Export for each module or record type, then save with a reason.",
+        "boundary": "The owner role always has full access and cannot be changed. You cannot grant permissions you do not hold yourself.",
+    }
+
+    def before_create(self, request, data):
+        if data.get("level") == "owner" and not is_owner(request.user):
+            raise BusinessRuleError("Only an owner can create an owner-level role.", "privilege_escalation")
+
+    def after_update(self, request, obj, changes):
+        if changes and obj.is_system and not obj.customized:
+            obj.customized = True
+            obj.save(update_fields=["customized"])
+
+    def edit_block_reason(self, request, obj):
+        if obj.code == "owner":
+            return "The owner role always has full access; it cannot be edited."
+        return None
 
     def extra_detail(self, request, obj):
-        return {"permissions": sorted(obj.permissions.values_list("code", flat=True)), "users": obj.grants.count()}
+        from .rbac import BASELINE_PERMISSIONS
+        return {
+            "permissions": sorted(obj.permissions.values_list("code", flat=True)),
+            "users": obj.grants.count(),
+            "is_owner_role": obj.code == "owner",
+            "baseline": [] if obj.level == "viewer" else BASELINE_PERMISSIONS,
+            "can_grant": None if is_owner(request.user) else sorted(effective_permissions(request.user)),
+        }
 
     def _set_permissions(request, obj, data):
         from .models import Permission, User
-        if obj.is_system:
-            raise BusinessRuleError("System roles are managed in rbac_matrix.py; create a custom role instead.", "invalid_state")
-        codes = data.get("permissions") or []
+        from .rbac import BASELINE_PERMISSIONS
+        if obj.code == "owner":
+            raise BusinessRuleError("The owner role always has full access; it cannot be changed.", "invalid_state")
+        codes = set(data.get("permissions") or [])
+        unknown = codes - set(Permission.objects.filter(code__in=codes).values_list("code", flat=True))
+        if unknown:
+            raise BusinessRuleError(f"Unknown permissions: {', '.join(sorted(unknown))}", "validation")
+        baseline = set(Permission.objects.filter(code__in=BASELINE_PERMISSIONS).values_list("code", flat=True))
+        if obj.level != "viewer":
+            codes |= baseline  # every named user needs these (people lookup, own inbox)
+        current = set(obj.permissions.values_list("code", flat=True))
         if not is_owner(request.user):
             mine = effective_permissions(request.user)
-            if any(c not in mine for c in codes):
+            added = codes - current - baseline
+            if any(c not in mine for c in added):
                 raise BusinessRuleError("You cannot grant permissions you do not hold.", "privilege_escalation")
         obj.permissions.set(Permission.objects.filter(code__in=codes))
+        if obj.is_system and not obj.customized:
+            obj.customized = True
+            obj.save(update_fields=["customized"])
         User.objects.filter(role_grants__role=obj).distinct().update(role_version=models_F("role_version") + 1)
-        audit.record("role_permissions_set", "core.role", obj, changes={"permissions": sorted(codes)}, reason=data.get("reason", ""))
+        audit.record("role_permissions_set", "core.role", obj,
+                     changes={"added": sorted(codes - current), "removed": sorted(current - codes)}, reason=data.get("reason", ""))
+        return obj
+
+    def _reset_default(request, obj, data):
+        from .models import Permission, User
+        from .rbac import default_role_permissions
+        if not obj.is_system or obj.code == "owner":
+            raise BusinessRuleError("Only built-in roles have a default to return to.", "invalid_state")
+        before = set(obj.permissions.values_list("code", flat=True))
+        codes = default_role_permissions(obj.code)
+        obj.permissions.set(Permission.objects.filter(code__in=codes))
+        obj.customized = False
+        obj.save(update_fields=["customized"])
+        User.objects.filter(role_grants__role=obj).distinct().update(role_version=models_F("role_version") + 1)
+        audit.record("role_reset_default", "core.role", obj,
+                     changes={"added": sorted(codes - before), "removed": sorted(before - codes)}, reason=data.get("reason", ""))
         return obj
 
     actions = [
-        Action("set_permissions", "Set permissions", _set_permissions, permission="security.roles.manage", reason_required=True,
+        Action("set_permissions", "Save permissions", _set_permissions, permission="security.roles.manage", reason_required=True,
+               available=lambda o, r: o.code != "owner",
                fields=[{"name": "permissions", "label": "Permission codes", "type": "multiselect", "source": "permissions"}]),
+        Action("reset_default", "Reset to built-in default", _reset_default, permission="security.roles.manage", reason_required=True,
+               tone="danger", confirm="Replace this role's permissions with the original built-in set?",
+               available=lambda o, r: o.is_system and o.customized and o.code != "owner"),
     ]
 
 

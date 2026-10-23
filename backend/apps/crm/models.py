@@ -23,7 +23,6 @@ class Lead(DocumentRecord):
     source = models.CharField("Source detail", max_length=60, blank=True, help_text="Exhibition name, referrer, campaign, partner ...")
     contact_name = models.CharField(max_length=120, blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
-    contact_email = models.EmailField(blank=True)
     potential_products = models.CharField(max_length=300, blank=True)
     potential_qty_per_month = models.PositiveIntegerField(default=0)
     buying_frequency = models.CharField(max_length=40, blank=True)
@@ -41,7 +40,7 @@ class Lead(DocumentRecord):
 
 
 class Activity(BaseRecord):
-    KINDS = [("call", "Call"), ("meeting", "Meeting"), ("visit", "Customer visit"), ("email", "Email"), ("note", "Note")]
+    KINDS = [("call", "Call"), ("meeting", "Meeting"), ("visit", "Customer visit"), ("note", "Note")]
     lead = models.ForeignKey(Lead, null=True, blank=True, on_delete=models.PROTECT, related_name="activities")
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.PROTECT, related_name="activities")
     kind = models.CharField(max_length=10, choices=KINDS)

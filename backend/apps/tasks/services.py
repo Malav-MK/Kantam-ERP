@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from apps.core import audit
+from apps.core.rbac import is_owner
 from apps.core.api import BusinessRuleError
 from apps.core.attachments import attachments_for
 from apps.core.services import notify
@@ -110,7 +111,7 @@ def transition(task, user, action, data):
     elif action == "verify":
         if s != "submitted":
             raise BusinessRuleError("Only submitted work can be verified.", "invalid_state")
-        if user.pk == task.assignee_id:
+        if user.pk == task.assignee_id and not is_owner(user):  # owner = super admin: no maker/checker
             raise BusinessRuleError("Verification must be by a different authorised reviewer.", "self_verification")
         fails = critical_failures(task)
         if fails:
@@ -120,7 +121,7 @@ def transition(task, user, action, data):
     elif action == "reopen":
         if s not in {"submitted", "verified"}:
             raise BusinessRuleError("Only submitted/verified work can be reopened.", "invalid_state")
-        if user.pk == task.assignee_id:
+        if user.pk == task.assignee_id and not is_owner(user):  # owner = super admin: no maker/checker
             raise BusinessRuleError("Assignee cannot reopen own work.", "self_verification")
         task.state, task.review_note = "reopened", data.get("reason", "")
         task.proof_round += 1  # old evidence stays in history but cannot satisfy the new round

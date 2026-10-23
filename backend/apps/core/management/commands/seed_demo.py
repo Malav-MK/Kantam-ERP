@@ -68,10 +68,10 @@ class Command(BaseCommand):
         c1 = Customer.objects.create(code="DEMO-C1", name="Demo Dairy Foods", industry="Dairy / ice cream", owner=managers["sales.exec"],
                                      delivery_address="Demo address, Gujarat", created_by=by)
         Customer.objects.create(code="DEMO-C2", name="Demo Sweets Co.", industry="Sweets", owner=managers["sales.exec"], created_by=by)
-        Contact.objects.create(customer=c1, name="Demo Buyer", phone="+910000000000", email="buyer@example.invalid", whatsapp_opt_in=True, created_by=by)
+        Contact.objects.create(customer=c1, name="Demo Buyer", phone="+910000000000", whatsapp_opt_in=True, created_by=by)
         s_poly = Supplier.objects.create(code="DEMO-S1", name="Demo Polymers", category="Polymer", lead_time_days=5, created_by=by)
         s_lbl = Supplier.objects.create(code="DEMO-S2", name="Demo Label Printers", category="Labels", lead_time_days=10, created_by=by)
-        Contact.objects.create(supplier=s_poly, name="Polymer desk", email="sales@poly.example.invalid", email_verified=True, created_by=by)
+        Contact.objects.create(supplier=s_poly, name="Polymer desk", phone="+910000000001", whatsapp_opt_in=True, created_by=by)
 
         def item(code, name, kind, uom, whole=False, **kw):
             return Item.objects.create(code=code, name=name, kind=kind, stock_uom=uom, whole_units=whole, created_by=by, **kw)

@@ -14,7 +14,7 @@ from django.utils import timezone
 from apps.core import audit
 from apps.core.api import BusinessRuleError
 from apps.core.attachments import attachments_for
-from apps.core.rbac import has_perm
+from apps.core.rbac import has_perm, is_owner
 from apps.core.registry import Action, Resource, register
 from apps.core.services import notify, notify_perm
 from apps.core.shifts import shift_for
@@ -105,7 +105,7 @@ class VisitResource(GateResource):
     def decide(request, obj, approve, note):
         if obj.status != "awaiting_approval":
             raise BusinessRuleError("Visit is not awaiting approval.", "invalid_state")
-        if obj.created_by_id == request.user.pk:
+        if obj.created_by_id == request.user.pk and not is_owner(request.user):  # owner = super admin: no maker/checker
             raise BusinessRuleError("You created this visit at the gate; the host must approve it.", "self_approval")
         if obj.host_id != request.user.pk and not has_perm(request.user, "gate.visit.approve"):
             raise BusinessRuleError("Only the assigned host or security supervisor can decide.", "not_authorised")
@@ -448,7 +448,7 @@ class GatePassResource(GateResource):
         return None if obj.status == "draft" else f"Pass is {obj.get_status_display()}."
 
     def _approve(request, obj, data):
-        if obj.created_by_id == request.user.pk:
+        if obj.created_by_id == request.user.pk and not is_owner(request.user):  # owner = super admin: no maker/checker
             raise BusinessRuleError("Maker/checker: another authorised person must approve.", "self_approval")
         obj.status = "approved"
         obj.approved_by = request.user

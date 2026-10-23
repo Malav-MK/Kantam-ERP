@@ -73,7 +73,7 @@ class PurchasePromiseTests(PlantTestCase):
 
     def test_promise_change_suppresses_unsent_supplier_message(self):
         sup, line, today = self._sent_line()
-        msg = draft_outbox(channel="email", recipient="s@example.com", template="purchase_order", payload={}, source_resource="purchase.purchaseorder",
+        msg = draft_outbox(channel="whatsapp", recipient="+910000000002", template="purchase_order", payload={}, source_resource="purchase.purchaseorder",
                            source_id=line.po_id, source_version=line.po.row_version, dedupe_key=f"t:{line.po_id}")
         sup.post(f"/api/r/purchase.poline/{line.pk}/actions/followup", {"promised_date": str(today + timedelta(days=2)), "overdue_reason": "Truck delayed"})
         msg.refresh_from_db()
@@ -106,9 +106,9 @@ class OutboxStateTests(PlantTestCase):
         self.assertFalse(record_delivery_status(m, "delivered"))
 
     def test_newer_draft_suppresses_older(self):
-        old = draft_outbox(channel="email", recipient="a@b.c", template="po", payload={}, source_resource="purchase.purchaseorder",
+        old = draft_outbox(channel="whatsapp", recipient="+910000000003", template="po", payload={}, source_resource="purchase.purchaseorder",
                            source_id="p1", source_version=1, dedupe_key="po:1")
-        draft_outbox(channel="email", recipient="a@b.c", template="po", payload={}, source_resource="purchase.purchaseorder",
+        draft_outbox(channel="whatsapp", recipient="+910000000003", template="po", payload={}, source_resource="purchase.purchaseorder",
                      source_id="p1", source_version=2, dedupe_key="po:2")
         old.refresh_from_db()
         self.assertEqual(old.status, "suppressed")

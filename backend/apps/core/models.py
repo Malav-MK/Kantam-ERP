@@ -74,7 +74,6 @@ class User(AbstractBaseUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username = models.CharField(max_length=60, unique=True)
     full_name = models.CharField(max_length=150)
-    email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     site = models.ForeignKey(Site, null=True, blank=True, on_delete=models.PROTECT)
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT, related_name="members")
@@ -133,6 +132,7 @@ class Role(models.Model):
     description = models.TextField(blank=True)
     permissions = models.ManyToManyField(Permission, blank=True, related_name="roles")
     is_system = models.BooleanField(default=False)
+    customized = models.BooleanField(default=False, help_text="A built-in role edited in the app; upgrades keep its permissions")
 
     def __str__(self):
         return self.name
@@ -437,7 +437,7 @@ class Notification(models.Model):
 
 
 class OutboxMessage(BaseRecord):
-    CHANNELS = [("whatsapp", "WhatsApp"), ("email", "Email"), ("erp", "Accounting integration")]
+    CHANNELS = [("whatsapp", "WhatsApp"), ("erp", "Accounting integration")]
     # Book UI-07: explicit communication states. None of them means the underlying work is done.
     STATUS = [
         ("draft", "Draft - approval needed"), ("approved", "Approved / eligible"), ("queued", "Queued"),

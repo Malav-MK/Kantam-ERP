@@ -85,6 +85,16 @@ class AuditVerifyView(APIView):
         return Response(result)
 
 
+class PermissionMatrixView(APIView):
+    """The View / Add / Edit / Delete / Approve / Export grid used by the role editor."""
+
+    required_permission = "security.roles.manage"
+
+    def get(self, request):
+        from .role_matrix import build_matrix
+        return Response(build_matrix())
+
+
 class LookupView(APIView):
     """Small static option lists used by admin action forms."""
 

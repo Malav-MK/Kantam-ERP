@@ -25,7 +25,7 @@ from rest_framework.response import Response
 from . import audit
 from .api import BusinessRuleError
 from .models import ApprovalPolicy, ApprovalRequest, User
-from .rbac import has_perm
+from .rbac import has_perm, is_owner
 from .services import notify, users_with_perm
 
 
@@ -109,6 +109,8 @@ def guard(request, res, operation, *, obj=None, raw=None, act=None):
     """Return a 202 Response when the operation must wait for a checker, else None."""
     if getattr(request, "maker_checker_exec", None) is not None:
         return None  # executing an already-approved request
+    if is_owner(request.user):
+        return None  # the owner is the super administrator: changes apply directly (and are still audited)
     candidates = _candidates(res, operation, act)
     if not candidates:
         return None
@@ -205,7 +207,7 @@ def decide(approval_id, user, approve, note=""):
             approval.status = "expired"
             approval.save(update_fields=["status", "updated_at"])
             return approval
-        if approval.created_by_id == user.pk:
+        if approval.created_by_id == user.pk and not is_owner(user):
             raise BusinessRuleError("Maker/checker: you cannot approve or reject your own request.", "self_approval")
         if any(a.get("user") == str(user.pk) for a in approval.approvals):
             raise BusinessRuleError("You have already approved this request; another checker is required.", "duplicate_checker")
@@ -296,6 +298,7 @@ DEFAULT_POLICIES = [
     ("Reset user password", "core.user", "action", "set_password", "always", [], None, "security.users.manage", 1),
     ("Reset user MFA", "core.user", "action", "reset_mfa", "always", [], None, "security.users.manage", 1),
     ("Change role permissions", "core.role", "action", "set_permissions", "always", [], None, "security.roles.manage", 1),
+    ("Reset role to default", "core.role", "action", "reset_default", "always", [], None, "security.roles.manage", 1),
     ("Create approval policy", "core.approvalpolicy", "create", "", "always", [], None, "approvals.policy.manage", 1),
     ("Change approval policy", "core.approvalpolicy", "update", "", "always", [], None, "approvals.policy.manage", 1),
     # Commercial master data

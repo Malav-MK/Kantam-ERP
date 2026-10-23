@@ -54,10 +54,8 @@ class Contact(BaseRecord):
     supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.PROTECT, related_name="contacts")
     name = models.CharField(max_length=120)
     designation = models.CharField(max_length=80, blank=True)
-    phone = models.CharField(max_length=20, blank=True)
-    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True, help_text="Mobile / WhatsApp number with country code, e.g. +91 98xxxxxxxx")
     whatsapp_opt_in = models.BooleanField(default=False, help_text="Recorded consent for WhatsApp business messages (p.50)")
-    email_verified = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
 
     def clean(self):

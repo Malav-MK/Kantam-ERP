@@ -342,3 +342,21 @@ table.diff td.new { font-weight: 650; background: var(--ok-bg); }
 .tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
 .tabs button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .tab-count { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: var(--surface-2); color: var(--text); font-size: 12px; text-align: center; }
+
+/* Role editor: View / Add / Edit / Delete / Approve / Export grid */
+.role-editor .card { margin-bottom: 16px; }
+.pad-x { padding: 0 16px; }
+.perm-grid th.perm-col, .perm-grid td.perm-col { text-align: center; width: 86px; }
+.perm-grid input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--brand); }
+.perm-grid input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.45; }
+.perm-grid tbody tr.perm-module { background: var(--surface-2); }
+.perm-grid tbody tr.perm-module td:first-child { cursor: pointer; }
+.perm-grid tbody tr.perm-row { cursor: default; }
+.perm-grid tbody tr.perm-row:hover { background: transparent; }
+.perm-grid td.perm-label { padding-left: 34px; }
+.perm-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 12px 16px; }
+.perm-special { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 0 16px 16px; }
+.perm-special fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin: 0; }
+.perm-special legend { font-weight: 600; padding: 0 4px; }
+.perm-special .check { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; cursor: pointer; }
+.perm-special .check input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--brand); }

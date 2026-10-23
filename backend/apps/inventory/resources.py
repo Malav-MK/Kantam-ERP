@@ -72,6 +72,8 @@ def _request_additional(request, obj, data):
         payload={"pr": str(pr.pk), "item": str(item.pk), "lot": data.get("lot"), "location": data.get("location"), "qty": str(data.get("qty"))},
         reason=data["reason"], required_permission="inventory.additional_issue.approve", requester=request.user,
     )
+    if approval.status == "approved":
+        return {"ok": True, "approval": str(approval.pk), "message": "Additional issue posted (owner approval)."}
     return {"ok": True, "approval": str(approval.pk), "message": "Additional issue sent for approval."}
 
 

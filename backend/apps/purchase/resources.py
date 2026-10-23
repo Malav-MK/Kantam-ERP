@@ -4,6 +4,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core import audit
+from apps.core.rbac import is_owner
 from apps.core.api import BusinessRuleError
 from apps.core.registry import Action, Resource, register
 from apps.core.services import draft_outbox, notify_perm, suppress_stale_outbox
@@ -35,7 +36,7 @@ class RequisitionResource(Resource):
         return None if obj.status in {"draft", "submitted"} else f"Requisition is {obj.status}."
 
     def _approve(request, obj, data):
-        if obj.created_by_id == request.user.pk:
+        if obj.created_by_id == request.user.pk and not is_owner(request.user):  # owner = super admin: no maker/checker
             raise BusinessRuleError("Maker/checker: requester cannot approve.", "self_approval")
         obj.status = "approved"
         obj.approved_by = request.user
@@ -99,7 +100,7 @@ class PurchaseOrderResource(Resource):
         return obj
 
     def _approve(request, obj, data):
-        if obj.created_by_id == request.user.pk:
+        if obj.created_by_id == request.user.pk and not is_owner(request.user):  # owner = super admin: no maker/checker
             raise BusinessRuleError("Maker/checker: the PO creator cannot approve it.", "self_approval")
         obj.status = "approved"
         obj.approved_by = request.user
@@ -110,17 +111,18 @@ class PurchaseOrderResource(Resource):
         return obj
 
     def _send(request, obj, data):
-        contact = obj.supplier.contacts.filter(active=True).exclude(email="").filter(email_verified=True).first()
+        contact = obj.supplier.contacts.filter(active=True, whatsapp_opt_in=True).exclude(phone="").first()
         if contact is None:
-            raise BusinessRuleError("No verified supplier email contact. Verify the contact before sending.", "no_verified_contact")
-        draft_outbox(channel="email", recipient=contact.email, template="purchase_order", source_resource="purchase.purchaseorder",
+            raise BusinessRuleError("No supplier contact with a WhatsApp number and recorded consent. Add one under the supplier's contacts.",
+                                    "no_verified_contact")
+        draft_outbox(channel="whatsapp", recipient=contact.phone, template="purchase_order", source_resource="purchase.purchaseorder",
                      source_id=obj.pk, source_version=obj.row_version, dedupe_key=f"po-send:{obj.pk}:{obj.row_version}",
                      payload={"po": obj.doc_no, "supplier": obj.supplier.name, "lines": [
                          {"item": l.item.code, "qty": str(l.qty), "promised": str(l.promised_date)} for l in obj.lines.all()]})
         obj.status = "sent"
         obj.row_version += 1
         obj.save()
-        audit.record("po_sent", "purchase.purchaseorder", obj, changes={"recipient": contact.email})
+        audit.record("po_sent", "purchase.purchaseorder", obj, changes={"recipient": contact.phone})
         return obj
 
     def _confirm(request, obj, data):
@@ -141,7 +143,7 @@ class PurchaseOrderResource(Resource):
     actions = [
         Action("submit", "Submit for approval", _submit, permission="purchase.purchaseorder.update", tone="primary", available=lambda o, r: o.status == "draft"),
         Action("approve", "Approve PO", _approve, permission="purchase.po.approve", tone="primary", available=lambda o, r: o.status == "pending_approval"),
-        Action("send", "Send to supplier (draft email)", _send, permission="purchase.po.approve", available=lambda o, r: o.status == "approved"),
+        Action("send", "Send to supplier (WhatsApp draft)", _send, permission="purchase.po.approve", available=lambda o, r: o.status == "approved"),
         Action("supplier_confirm", "Record supplier confirmation", _confirm, permission="purchase.purchaseorder.update",
                fields=[{"name": "note", "label": "Confirmation details", "type": "text"}], available=lambda o, r: o.status in {"approved", "sent", "partial"}),
         Action("cancel", "Cancel PO", _cancel, permission="purchase.po.approve", reason_required=True, tone="danger",

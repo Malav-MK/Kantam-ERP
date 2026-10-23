@@ -32,4 +32,5 @@ urlpatterns = [
     path("audit", views.AuditListView.as_view()),
     path("audit/verify", views.AuditVerifyView.as_view()),
     path("lookups/<str:source>", views.LookupView.as_view()),
+    path("roles/permission-matrix", views.PermissionMatrixView.as_view()),
 ]

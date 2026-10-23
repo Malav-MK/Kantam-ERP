@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from apps.core import audit
+from apps.core.rbac import is_owner
 from apps.core.api import BusinessRuleError
 from apps.core.registry import Action, Resource, register
 from apps.core.services import notify_perm
@@ -109,7 +110,7 @@ class ComplaintResource(Resource):
         if need and not getattr(obj, need):
             raise BusinessRuleError(f"Record {need.replace('_', ' ')} before moving to {nxt}.", "missing_evidence")
         if nxt == "closed":
-            if obj.responsible_id == request.user.pk:
+            if obj.responsible_id == request.user.pk and not is_owner(request.user):  # owner = super admin: no maker/checker
                 raise BusinessRuleError("Closure approval must come from someone other than the responsible owner.", "self_approval")
             obj.closed_by = request.user
         if nxt == "contained" and data.get("hold_lots"):

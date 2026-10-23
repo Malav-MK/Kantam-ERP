@@ -39,7 +39,7 @@ CAPABILITIES = {
     "tasks.verify": ("tasks", "Verify submitted task proof"),
     "tasks.assign": ("tasks", "Assign tasks to others"),
     "maintenance.pm.approve": ("tasks", "Approve / activate PM plans"),
-    "outbox.approve": ("core", "Approve outbound WhatsApp/email messages"),
+    "outbox.approve": ("core", "Approve outbound WhatsApp messages"),
     "approvals.view": ("core", "See approval queue"),
     "approvals.policy.manage": ("core", "Propose / approve maker-checker policies"),
     "audit.view": ("core", "View audit history"),

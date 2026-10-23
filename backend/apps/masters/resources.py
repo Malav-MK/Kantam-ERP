@@ -61,9 +61,9 @@ class ContactResource(MasterResource):
     label = "Contacts"
     singular = "Contact"
     ordering = ["name"]
-    list_fields = ["name", "customer", "supplier", "designation", "phone", "email", "whatsapp_opt_in", "active"]
-    form_fields = ["customer", "supplier", "name", "designation", "phone", "email", "whatsapp_opt_in", "email_verified", "active"]
-    search_fields = ["name", "phone", "email"]
+    list_fields = ["name", "customer", "supplier", "designation", "phone", "whatsapp_opt_in", "active"]
+    form_fields = ["customer", "supplier", "name", "designation", "phone", "whatsapp_opt_in", "active"]
+    search_fields = ["name", "phone"]
     filter_fields = ["customer", "supplier", "active"]
 
 

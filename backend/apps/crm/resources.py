@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.core import audit
 from apps.core.api import BusinessRuleError
-from apps.core.rbac import has_perm, role_levels
+from apps.core.rbac import has_perm, is_owner, role_levels
 from apps.core.registry import Action, Resource, register
 from apps.core.services import request_approval
 from apps.masters.models import Customer
@@ -45,7 +45,7 @@ class LeadResource(Resource):
     module = "crm"
     title_field = "company"
     list_fields = ["doc_no", "company", "industry", "power_source", "salesperson", "stage", "priority_score", "next_action", "next_action_date"]
-    form_fields = ["company", "industry", "location", "source", "contact_name", "contact_phone", "contact_email", "potential_products",
+    form_fields = ["company", "industry", "location", "source", "contact_name", "contact_phone", "potential_products",
                    "potential_qty_per_month", "buying_frequency", "expected_buy_date", "salesperson", "next_action", "next_action_date"]
     # The original acquisition source is captured once and never edited, so attribution cannot be rewritten later.
     create_only_fields = ["power_source"]
@@ -220,7 +220,7 @@ class QuotationResource(Resource):
     def _approve(request, obj, data):
         if obj.status not in {"draft", "pending_approval"}:
             raise BusinessRuleError("Quotation is not awaiting approval.", "invalid_state")
-        if obj.status == "pending_approval" and obj.created_by_id == request.user.pk:
+        if obj.status == "pending_approval" and obj.created_by_id == request.user.pk and not is_owner(request.user):
             raise BusinessRuleError("Maker/checker: another person must approve the margin exception.", "self_approval")
         obj.status = "approved"
         obj.approved_by = request.user

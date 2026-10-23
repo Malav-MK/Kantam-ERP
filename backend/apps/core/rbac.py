@@ -129,22 +129,40 @@ class DenyByDefault(BasePermission):
         return granted
 
 
+def default_role_permissions(code, all_codes=None):
+    """Permission codes a built-in role has by default (rbac_matrix.py)."""
+    from .rbac_matrix import ROLES
+
+    spec = ROLES[code]
+    all_codes = all_codes if all_codes is not None else set(Permission.objects.values_list("code", flat=True))
+    granted = expand_patterns(spec["include"], spec["exclude"], all_codes)
+    if spec["level"] != "viewer":
+        # Minimal shared projection every named user needs (name-only people
+        # lookup for assignment fields, department list, approval inbox).
+        granted |= {c for c in BASELINE_PERMISSIONS if c in all_codes}
+    return granted
+
+
 def sync_roles_from_matrix():
-    """Create/refresh system roles from rbac_matrix against current permission set."""
+    """Create/refresh system roles from rbac_matrix against current permission set.
+    Built-in roles edited in the app (customized) keep their permissions; the owner role
+    always has every permission."""
     from .rbac_matrix import ROLES
 
     all_codes = set(Permission.objects.values_list("code", flat=True))
     for code, spec in ROLES.items():
-        role, _ = Role.objects.update_or_create(
-            code=code,
-            defaults={"name": spec["name"], "level": spec["level"], "description": spec["description"], "is_system": True},
-        )
-        granted = expand_patterns(spec["include"], spec["exclude"], all_codes)
-        if spec["level"] != "viewer":
-            # Minimal shared projection every named user needs (name-only people
-            # lookup for assignment fields, department list, approval inbox).
-            granted |= {c for c in BASELINE_PERMISSIONS if c in all_codes}
-        role.permissions.set(Permission.objects.filter(code__in=granted))
+        role = Role.objects.filter(code=code).first()
+        if role is None:
+            role = Role.objects.create(code=code, name=spec["name"], level=spec["level"], description=spec["description"], is_system=True)
+        elif role.customized and spec["level"] != "owner":
+            # Keep the administrator's edits; only drop permissions that no longer exist.
+            role.is_system = True
+            role.save(update_fields=["is_system"])
+            continue
+        else:
+            role.name, role.level, role.description, role.is_system, role.customized = spec["name"], spec["level"], spec["description"], True, False
+            role.save()
+        role.permissions.set(Permission.objects.filter(code__in=default_role_permissions(code, all_codes)))
     # Any change to role definitions invalidates outstanding tokens.
     from .models import User
     from django.db.models import F

@@ -210,6 +210,8 @@ class SOLineResource(Resource):
         if "qty" in changes:
             changes["qty"] = int(changes["qty"])
         approval = services.request_line_amendment(obj, changes, data["reason"], request.user)
+        if approval.status == "approved":
+            return {"ok": True, "approval": str(approval.pk), "message": "Amendment applied (owner approval) and a new order version recorded."}
         return {"ok": True, "approval": str(approval.pk), "message": "Amendment sent for approval. The current version stays in force until approved."}
 
     def _cancel_balance(request, obj, data):

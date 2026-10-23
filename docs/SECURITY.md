@@ -19,7 +19,7 @@ This document is for the developers and the IT/security reviewers of the Kantam 
 | **A07 Identification & authentication failures** | Named accounts only; 12+ character passwords with common/numeric/similarity checks; lockout after 5 failures; **generic response for locked, unknown or wrong-password logins** (no username enumeration); TOTP MFA for owner/admin/manager; **temporary passwords must be changed before use**; password reuse refused; device-bound sessions; idle and absolute timeouts; refresh-token rotation with reuse detection; permission changes invalidate tokens | `core/auth_views.py`, `core/authentication.py` | `ZeroTrustTests`, `test_temporary_password_must_be_changed_first` |
 | **A08 Software & data integrity** | Hash-chained audit log with `verify_chain()`; maker/checker execution re-checks the record version | `core/audit.py`, `maker_checker.py` | `test_audit_chain_detects_tampering`, `test_field_conditional_policy_and_stale_detection` |
 | **A09 Logging & monitoring** | Audit trail for every change, export, login and evidence view. `kantam.security` log for **every access denial**. Gateway JSON access log (never logs tokens). Login attempt table | `rbac.py`, `audit.py`, `gateway/src/app.js` | `test_access_denials_are_logged` |
-| **A10 SSRF** | The server never fetches user-supplied URLs. Outbound messaging is approval-gated drafts only | `core/services.py` `draft_outbox` | — |
+| **A10 SSRF** | The server never fetches user-supplied URLs. Outbound messaging (WhatsApp only; no email addresses are stored) is approval-gated drafts only | `core/services.py` `draft_outbox` | — |
 
 ASVS areas covered: V2 authentication, V3 session management, V4 access control, V5 validation and encoding, V7 logging, V8 data protection (`no-store`, field projection), V12 files, V13 API, V14 configuration.
 
@@ -51,7 +51,15 @@ If someone bypasses the UI, for example with browser developer tools or by calli
    - the record has not changed since submission. If it has, the request becomes **stale** and must be resubmitted, so nothing is ever applied over newer data.
 6. The audit trail records the change under the maker's name with the approval reference. The approval keeps every checker's name, time and note.
 
-### Rules that are always enforced
+### The owner is the super administrator
+
+The owner account is exempt from every maker/checker rule. This covers policies, built-in two-step workflows and "someone else must approve" checks. An owner's change applies immediately and is still recorded in the audit trail under the owner's name. Two protections remain:
+- only an owner can change an owner account;
+- the owner role can't be limited.
+
+Kantam decided this deliberately (23 Oct 2026). Keep the number of owner accounts small and protect them with MFA.
+
+### Rules that are always enforced (for everyone except the owner)
 
 - The maker can never approve or reject their own request.
 - Each checker counts only once, and policies can require 1–3 distinct checkers.
@@ -65,8 +73,8 @@ If someone bypasses the UI, for example with browser developer tools or by calli
 | Policy | Trigger | Checker permission |
 |---|---|---|
 | Grant role / Revoke role | always | `security.roles.manage` |
+| Change role permissions / Reset role to default | always | `security.roles.manage` |
 | Reset user password / Reset MFA | always | `security.users.manage` |
-| Change role permissions | always | `security.roles.manage` |
 | Create / change approval policy | always | `approvals.policy.manage` |
 | Customer credit / terms change | `credit_limit`, `payment_terms`, `advance_required_pct` or `freight_basis` edited | `sales.so.approve_amendment` |
 | Supplier terms / GSTIN change | `payment_terms` or `gstin` edited | `purchase.po.approve` |

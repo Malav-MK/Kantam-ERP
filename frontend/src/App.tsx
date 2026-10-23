@@ -6,6 +6,7 @@ import { useProfileTheme } from "./theme";
 import { AuditLog, GateBoard, MachineBoard, MyWork, OwnerDashboard, PlanningBoard, Shortages, StoresDaily, Trace, TvBoard } from "./pages/Boards";
 import { ResourceDetail, ResourceList } from "./pages/ResourcePages";
 import { ApprovalDetail, ApprovalsInbox } from "./pages/Approvals";
+import { RoleEditor } from "./pages/RoleEditor";
 import { ForcedPasswordChange, RequirePerm } from "./components/Guard";
 
 function Routed() {
@@ -32,6 +33,7 @@ function Routed() {
         <Route path="approvals" element={<RequirePerm any={["core.approvalrequest.view"]}><ApprovalsInbox /></RequirePerm>} />
         <Route path="approvals/:id" element={<RequirePerm any={["core.approvalrequest.view"]}><ApprovalDetail /></RequirePerm>} />
         <Route path="r/core.approvalrequest/:id" element={<RequirePerm any={["core.approvalrequest.view"]}><ApprovalDetail /></RequirePerm>} />
+        <Route path="r/core.role/:id" element={<RequirePerm any={["security.roles.manage"]}><RoleEditor /></RequirePerm>} />
         <Route path="r/:key" element={<ResourceList />} />
         <Route path="r/:key/:id" element={<ResourceDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />

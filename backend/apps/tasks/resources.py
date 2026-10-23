@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.core import audit
 from apps.core.api import BusinessRuleError
-from apps.core.rbac import has_perm, role_levels
+from apps.core.rbac import has_perm, is_owner, role_levels
 from apps.core.registry import Action, Resource, register
 from apps.core.services import notify, notify_perm
 
@@ -238,7 +238,7 @@ class BreakdownResource(Resource):
             fpi = obj.first_piece_inspection
             if fpi is None or fpi.status != "decided" or fpi.kind not in {"restart", "first_piece"}:
                 raise BusinessRuleError("A decided QC restart / first-piece inspection is required before restart.", "qc_restart_required")
-            if obj.technician_id == request.user.pk:
+            if obj.technician_id == request.user.pk and not is_owner(request.user):  # owner = super admin: no maker/checker
                 raise BusinessRuleError("Restart approval must be by a supervisor other than the technician.", "self_approval")
             obj.restart_approved_by = request.user
             obj.restart_at = now
@@ -295,7 +295,7 @@ class IncidentResource(Resource):
         req = {"contained": "immediate_response", "assigned": "accountable_id", "investigation": "root_cause", "verification": "action", "closed": "verification"}[nxt]
         if not getattr(obj, req):
             raise BusinessRuleError(f"Record {req.replace('_id', '').replace('_', ' ')} first.", "validation")
-        if nxt == "closed" and obj.accountable_id == request.user.pk and not role_levels(request.user) & {"owner"}:
+        if nxt == "closed" and obj.accountable_id == request.user.pk and not is_owner(request.user):
             raise BusinessRuleError("Closure must be verified by someone other than the accountable person.", "self_approval")
         before = obj.status
         obj.status = nxt

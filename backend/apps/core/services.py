@@ -63,6 +63,11 @@ def request_approval(*, kind, resource, obj, summary, payload, reason, required_
     )
     audit.record("approval_requested", resource, obj, changes={"approval": str(approval.pk), "kind": kind, "payload": payload}, reason=reason,
                  approval_ref=approval.pk)
+    from .rbac import is_owner
+    if is_owner(requester):
+        # The owner is the super administrator: the request is approved and applied at once (still fully audited).
+        from .maker_checker import decide
+        return decide(approval.pk, requester, True, "Owner (super admin) - applied directly")
     approvers = [u for u in users_with_perm(required_permission) if u.pk != requester.pk]
     notify(
         approvers, f"Approval needed: {summary}", severity="warning", resource="core.approvalrequest",
@@ -77,7 +82,7 @@ def decide_approval(approval, user, approve, note=""):
 
 
 def draft_outbox(*, channel, recipient, template, payload, source_resource, source_id, source_version=1, dedupe_key):
-    """Outbound WhatsApp/email starts as a draft; nothing leaves the plant without approval (p.50)."""
+    """Outbound WhatsApp messages start as a draft; nothing leaves the plant without approval (p.50)."""
     msg, created = OutboxMessage.objects.get_or_create(
         dedupe_key=dedupe_key,
         defaults=dict(

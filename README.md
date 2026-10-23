@@ -56,7 +56,7 @@ Nothing is trusted because of where it sits on the network. Each request is veri
 | Every request re-checks the session (revocation, idle/absolute timeout), device, user state and **role version**, so a permission change applies on the next call | Django | p.27 |
 | Micro-segmentation: Django rejects any request not HMAC-signed by the gateway (timestamped, client IP bound) and has no published port | both | p.28 |
 | RBAC deny-by-default on every endpoint, export, attachment and action. Row scope (e.g. sales execs see own leads; hosts see own visitors). Field projection (prices, supplier rates, personal data) | Django | p.27, p.41 |
-| Maker/checker: configurable approval policies hold sensitive creates/edits/actions until 1–3 *different* authorised checkers approve; re-validated at execution; stale changes refused. See [SECURITY.md](docs/SECURITY.md) | Django + UI | p.19, p.62 |
+| Maker/checker: configurable approval policies hold sensitive creates/edits/actions until 1–3 *different* authorised checkers approve; re-validated at execution; stale changes refused. The owner is super admin and is exempt. See [SECURITY.md](docs/SECURITY.md) | Django + UI | p.19, p.62 |
 | Hash-chained audit log with `verify_chain()`; no hard deletes of posted records | Django | p.19 |
 | Evidence files: magic-byte validation, EXIF/GPS stripped, SHA-256, random names outside the web root, scope re-checked on every view, locked after closure | Django | p.41 |
 | CSP, HSTS, no-store caching, no CORS, cross-site requests refused, rate limits, sanitised TV projection | gateway | p.26, p.28 |
@@ -72,7 +72,7 @@ There are 23 system roles, defined in `backend/apps/core/rbac_matrix.py`. The fu
 `store_manager`, `store_staff`, `purchase_supervisor`, `purchase_manager`, `qc_manager`, `qc_inspector`, `dispatch`,
 `accounts`, `security_guard`, `security_supervisor`, `hr`, `maintenance_manager`, `technician`, `tv_viewer`.
 
-Roles can be scoped to a department and time-boxed (delegation with expiry). You can add custom roles in the admin UI, but you can't grant permissions you don't hold yourself.
+Roles can be scoped to a department and time-boxed (delegation with expiry). In **Administration → Roles**, any role except the owner role can be edited with a simple grid. Each module or record type has View, Add, Edit, Delete (cancel/reverse), Approve and Export tick boxes, followed by a list of special permissions such as price visibility and dashboards. Edited built-in roles keep their changes across upgrades, and "Reset to built-in default" undoes them. You can't grant permissions you don't hold yourself.
 
 ## Run it locally (development)
 
