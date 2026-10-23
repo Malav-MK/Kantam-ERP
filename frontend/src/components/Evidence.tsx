@@ -16,7 +16,7 @@ const PURPOSES: Record<string, string[]> = {
   "tasks.breakdown": ["defect_photo", "before_photo", "after_photo"],
   "quality.inspection": ["defect_photo", "measurement"],
   "quality.complaint": ["customer_photo", "response_document"],
-  "masters.artwork": ["kld", "approved_file", "customer_approval"],
+  "masters.artwork": ["design_pdf", "customer_approval", "kld", "approved_file"],
 };
 
 function Thumb({ att }: { att: Att }) {

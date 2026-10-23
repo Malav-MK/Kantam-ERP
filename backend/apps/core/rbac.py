@@ -68,6 +68,11 @@ def is_owner(user):
     return "owner" in role_levels(user)
 
 
+def can_delete_records(user):
+    """Permanent deletes are for the owner and security / IT administrators."""
+    return bool({"owner", "admin"} & role_levels(user))
+
+
 def scoped_department_ids(user):
     """Departments the user may see department-scoped records for."""
     ids = {g.department_id for g in active_grants(user) if g.department_id}

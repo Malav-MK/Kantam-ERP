@@ -36,9 +36,13 @@ class Customer(BaseRecord):
 
 
 class Supplier(BaseRecord):
+    CATEGORIES = [
+        ("polymer", "Polymer"), ("labels", "Labels / stickers"), ("masterbatch", "Masterbatch"), ("packing", "Packing material"),
+        ("spares", "Spares / maintenance"), ("services", "Services"), ("other", "Other"),
+    ]
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=200)
-    category = models.CharField(max_length=60, blank=True, help_text="Polymer, labels, masterbatch, packing, spares ...")
+    category = models.CharField(max_length=20, choices=CATEGORIES, blank=True)
     gstin = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     payment_terms = models.CharField(max_length=120, blank=True)
@@ -149,19 +153,25 @@ class Artwork(BaseRecord):
         ("customer_approval", "Customer approval"), ("print_release", "Print release"), ("approved", "Eligible for production"),
         ("obsolete", "Obsolete"),
     ]
-    FINISHES = [("glossy", "Glossy"), ("matte", "Matte"), ("metallic", "Metallic"), ("foil", "Foil"), ("other", "Other")]
+    FINISHES = [
+        ("glossy", "Glossy"), ("matte", "Matte"), ("metallic", "Metallic"), ("foil", "Foil"),
+        ("orange_peel", "Orange Peel (Normal)"), ("orange_peel_glossy", "Orange Peel (Glossy)"), ("orange_peel_foil", "Orange Peel + Foil"),
+        ("transparent", "Transparent"), ("transparent_lam12", "Transparent + (12 Mic. lamination)"), ("other", "Other"),
+    ]
     code = models.CharField("MK-ART / design no.", max_length=40)
     revision = models.PositiveSmallIntegerField(default=1)
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="artworks")
     component_type = models.CharField(max_length=10, choices=COMPONENT_TYPES)
-    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.PROTECT)
+    customers = models.ManyToManyField(Customer, blank=True, related_name="artworks", help_text="Customers this design is for")
     flavour = models.CharField(max_length=80, blank=True)
     common_design = models.BooleanField(default=False)
     label_item = models.ForeignKey(Item, null=True, blank=True, on_delete=models.PROTECT, related_name="artworks", limit_choices_to={"kind": "label"})
     kld_reference = models.CharField("KLD reference", max_length=80, blank=True)
-    dimensions = models.CharField(max_length=80, blank=True)
+    height_mm = models.DecimalField("Height (mm)", max_digits=8, decimal_places=2, null=True, blank=True)
+    width_mm = models.DecimalField("Width (mm)", max_digits=8, decimal_places=2, null=True, blank=True)
     colour_reference = models.CharField(max_length=120, blank=True)
-    finish = models.CharField(max_length=10, choices=FINISHES, default="glossy")
+    finish = models.CharField(max_length=20, choices=FINISHES)
+    finish_other = models.CharField("Other finish", max_length=80, blank=True)
     supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.PROTECT)
     status = models.CharField(max_length=20, choices=STATUS, default="requirement", db_index=True)
     internal_approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
@@ -176,6 +186,15 @@ class Artwork(BaseRecord):
     @property
     def eligible(self):
         return self.status == "approved"
+
+    @property
+    def size(self):
+        """'Height: 98.25 MM, Width: 506 MM'"""
+        def mm(v):
+            return f"{v.normalize():f}" if v is not None else "-"
+        if self.height_mm is None and self.width_mm is None:
+            return ""
+        return f"Height: {mm(self.height_mm)} MM, Width: {mm(self.width_mm)} MM"
 
     def __str__(self):
         flavour = f" {self.flavour}" if self.flavour else ""

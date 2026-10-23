@@ -59,8 +59,15 @@ class ZTClient:
         h = self._headers("POST", path)
         return self.c.post(path, data={"file": file, "purpose": purpose, **fields}, **h)
 
+    def post_form(self, path, payload, files):
+        """Create with required files: fields as JSON in "payload", each file under its purpose."""
+        return self.c.post(path, data={"payload": json.dumps(payload), **files}, **self._headers("POST", path))
+
     def patch(self, path, data):
         return self.c.patch(path, data=json.dumps(data), content_type="application/json", **self._headers("PATCH", path))
+
+    def delete(self, path, data=None):
+        return self.c.delete(path, data=json.dumps(data or {}), content_type="application/json", **self._headers("DELETE", path))
 
     # --- flows -----------------------------------------------------------
     def enrol(self, name="Test PC"):
@@ -151,8 +158,9 @@ class PlantTestCase(TestCase):
             for ctype in ("container", "lid"):
                 lab = Item.objects.create(code=f"L-{fl}-{ctype}", name=f"Label {fl} {ctype}", kind="label", stock_uom="pcs", whole_units=True)
                 cls.labels[(fl, ctype)] = lab
-                cls.arts[(fl, ctype)] = Artwork.objects.create(code=f"MK-{fl}-{ctype}", product=cls.product, component_type=ctype, customer=cls.customer,
+                cls.arts[(fl, ctype)] = Artwork.objects.create(code=f"MK-{fl}-{ctype}", product=cls.product, component_type=ctype, finish="glossy",
                                                                flavour=fl, label_item=lab, status="approved")
+                cls.arts[(fl, ctype)].customers.add(cls.customer)
         cls.m1 = Machine.objects.create(code="M01", name="JSW1", tonnage=250, has_iml_robot=True)
         cls.m2 = Machine.objects.create(code="M02", name="JSW2", tonnage=250, has_iml_robot=True)
         cls.mould_tub = Mould.objects.create(code="MT", name="Tub mould", product_component=cls.pc_tub, cavities=2, active_cavities=2, standard_cycle_s=8)

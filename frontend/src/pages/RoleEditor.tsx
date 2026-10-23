@@ -32,7 +32,7 @@ export function RoleEditor() {
   const { id } = useParams();
   const nav = useNavigate();
   const { profile } = useAuth();
-  const isOwner = !!profile?.levels.includes("owner");
+  const canDelete = !!profile?.levels.some((l) => l === "owner" || l === "admin");
   const [role, setRole] = useState<Role | null>(null);
   const [matrix, setMatrix] = useState<Matrix | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -129,7 +129,7 @@ export function RoleEditor() {
     if (!window.confirm(`Delete the role "${role.name}"? People must not hold it any more. This cannot be undone from the screen.`)) return;
     setBusy(true); setError("");
     try {
-      await api("POST", `/api/r/core.role/${role.id}/actions/delete_role`, { reason }, { idempotencyKey: newIdempotencyKey() });
+      await api("DELETE", `/api/r/core.role/${role.id}`, { reason });
       nav("/r/core.role");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
@@ -152,7 +152,7 @@ export function RoleEditor() {
         </div>
         {!readOnly && (
           <div className="row gap">
-            {isOwner && <button type="button" className="btn danger" disabled={busy} onClick={deleteRole}
+            {canDelete && <button type="button" className="btn danger" disabled={busy} onClick={deleteRole}
               title={role._extra.users ? "Revoke this role from its users first" : "Delete this role"}><Icon name="trash" size={16} />Delete role</button>}
             {role.is_system && role.customized && <button type="button" className="btn" disabled={busy} onClick={resetDefault}>Reset to built-in default</button>}
             <button className="btn primary" disabled={busy || reason.trim().length < 5 || (!dirty && details.name === role.name && details.description === (role.description ?? ""))}>
@@ -171,7 +171,7 @@ export function RoleEditor() {
             <label className="field"><span>Description</span><input value={details.description} onChange={(e) => setDetails({ ...details, description: e.target.value })} /></label>
             <label className="field span2"><span>Reason for this change (recorded in history)<b className="req">*</b></span>
               <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Stores staff now also record physical counts" /></label>
-            {isOwner && role._extra.users > 0 && (
+            {canDelete && role._extra.users > 0 && (
               <p className="small muted span2">{role._extra.users} user(s) hold this role. Revoke it from them (Administration → Users → Revoke role) before deleting it.</p>
             )}
           </div>

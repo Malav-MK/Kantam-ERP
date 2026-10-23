@@ -8,27 +8,27 @@ Deny by default: anything not listed is refused on the server (API, exports, att
 | Role | Level | Description | # permissions |
 |---|---|---|---|
 | `it_admin` Security / IT administrator | admin | Users, roles, devices and sessions. No commercial or production data. | 15 |
-| `gm` General manager / plant head | manager | Site commitments, capacity, quality, maintenance and overdue cross-department actions. | 155 |
-| `hr` HR / workforce | manager | Employee/agency events and attendance exceptions. | 22 |
-| `maintenance_manager` Maintenance manager | manager | Maintenance division, PM plans, breakdown work orders. | 40 |
-| `planner` Planner / production manager | manager | Plans and released PRs; revisions traced; cannot alter historical actuals. | 160 |
-| `purchase_manager` Purchase manager | manager | Procurement approval / PO authority under assigned limits. | 128 |
-| `qc_manager` Quality manager | manager | Inspection, hold/release, specifications and CAPA authority. | 131 |
-| `sales_manager` Sales / marketing manager | manager | Leads, quotations and SO amendments; cannot post production or stock. | 67 |
-| `security_supervisor` Security supervisor | manager | Scoped security approval and gate exception policy. | 80 |
-| `store_manager` Store manager | manager | Receipt/issue/return/transfer entries; cannot change approved artwork or SO colour. | 121 |
-| `owner` Owner / master | owner | All business dashboards and records; approves exceptions. MFA required. | 307 |
-| `accounts` Accounts | staff | Receivables, payables, credit release and integration queue. | 24 |
-| `artwork` Artwork / label controller | staff | KLD, artwork revisions, approvals and label eligibility. | 24 |
-| `dispatch` FG / dispatch | staff | Packing, picking and shipments subject to quality/commercial release. | 41 |
-| `operator` Machine operator | staff | Assigned machine/job/shift entries only. | 15 |
-| `production_supervisor` Production supervisor / shift engineer | staff | Actuals, downtime and handover within open shift; cannot release QC holds. | 42 |
-| `purchase_supervisor` Purchase supervisor | staff | Follow-up and supplier commitments; no PO approval authority. | 35 |
-| `qc_inspector` QC inspector | staff | Records inspections; release requires quality.release. | 17 |
-| `sales_exec` Sales executive | staff | Own leads, follow-ups, quotations and orders. | 43 |
-| `security_guard` Security guard | staff | Visitor/driver verification and movement evidence; cannot self-approve entry. | 44 |
-| `store_staff` Store staff | staff | Store movements against released shift PRs. | 26 |
-| `technician` Maintenance technician | staff | Assigned work orders with evidence. | 10 |
+| `gm` General manager / plant head | manager | Site commitments, capacity, quality, maintenance and overdue cross-department actions. | 158 |
+| `hr` HR / workforce | manager | Employee/agency events and attendance exceptions. | 23 |
+| `maintenance_manager` Maintenance manager | manager | Maintenance division, PM plans, breakdown work orders. | 41 |
+| `planner` Planner / production manager | manager | Plans and released PRs; revisions traced; cannot alter historical actuals. | 163 |
+| `purchase_manager` Purchase manager | manager | Procurement approval / PO authority under assigned limits. | 130 |
+| `qc_manager` Quality manager | manager | Inspection, hold/release, specifications and CAPA authority. | 134 |
+| `sales_manager` Sales / marketing manager | manager | Leads, quotations and SO amendments; cannot post production or stock. | 68 |
+| `security_supervisor` Security supervisor | manager | Scoped security approval and gate exception policy. | 81 |
+| `store_manager` Store manager | manager | Receipt/issue/return/transfer entries; cannot change approved artwork or SO colour. | 124 |
+| `owner` Owner / master | owner | All business dashboards and records; approves exceptions. MFA required. | 312 |
+| `accounts` Accounts | staff | Receivables, payables, credit release and integration queue. | 25 |
+| `artwork` Artwork / label controller | staff | KLD, artwork revisions, approvals and label eligibility. | 25 |
+| `dispatch` FG / dispatch | staff | Packing, picking and shipments subject to quality/commercial release. | 42 |
+| `operator` Machine operator | staff | Assigned machine/job/shift entries only. | 16 |
+| `production_supervisor` Production supervisor / shift engineer | staff | Actuals, downtime and handover within open shift; cannot release QC holds. | 43 |
+| `purchase_supervisor` Purchase supervisor | staff | Follow-up and supplier commitments; no PO approval authority. | 36 |
+| `qc_inspector` QC inspector | staff | Records inspections; release requires quality.release. | 18 |
+| `sales_exec` Sales executive | staff | Own leads, follow-ups, quotations and orders. | 44 |
+| `security_guard` Security guard | staff | Visitor/driver verification and movement evidence; cannot self-approve entry. | 45 |
+| `store_staff` Store staff | staff | Store movements against released shift PRs. | 27 |
+| `technician` Maintenance technician | staff | Assigned work orders with evidence. | 11 |
 | `tv_viewer` TV / wall display | viewer | Read-only sanitised production projection. No customer, price, people or evidence data. | 1 |
 
 ## Dashboards
@@ -116,6 +116,10 @@ Deny by default: anything not listed is refused on the server (API, exports, att
 | `masters.item.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `masters.item.update` |  |  |  |  |  | ✔ |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `masters.item.view` |  | ✔ |  |  | ✔ | ✔ | ✔ | ✔ |  | ✔ | ✔ |  | ✔ | ✔ |  | ✔ | ✔ | ✔ | ✔ |  | ✔ |  |  |
+| `masters.labelitem.create` |  |  |  |  |  |  |  |  |  |  | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
+| `masters.labelitem.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
+| `masters.labelitem.update` |  |  |  |  |  |  |  |  |  |  | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
+| `masters.labelitem.view` |  | ✔ |  |  | ✔ |  | ✔ |  |  |  | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `masters.location.create` |  |  |  |  |  |  |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `masters.location.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `masters.location.update` |  |  |  |  |  |  |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -224,6 +228,7 @@ Deny by default: anything not listed is refused on the server (API, exports, att
 | `inventory.reservation.view` |  | ✔ |  |  | ✔ | ✔ |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |  |
 | `inventory.return.create` |  |  |  |  |  |  |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |  |
 | `inventory.stockbalance.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
+| `inventory.stockbalance.opening_stock` |  |  |  |  |  |  |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `inventory.stockbalance.view` |  | ✔ |  | ✔ | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  | ✔ | ✔ |  |  | ✔ |  |  |  | ✔ |  |  |
 | `inventory.stockcount.create` |  |  |  |  |  |  |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `inventory.stockcount.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -237,6 +242,10 @@ Deny by default: anything not listed is refused on the server (API, exports, att
 
 | Permission | it_admin | gm | hr | maintenance_manager | planner | purchase_manager | qc_manager | sales_manager | security_supervisor | store_manager | owner | accounts | artwork | dispatch | operator | production_supervisor | purchase_supervisor | qc_inspector | sales_exec | security_guard | store_staff | technician | tv_viewer |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `masters.supplier.create` |  |  |  |  |  | ✔ |  |  |  |  | ✔ |  |  |  |  |  | ✔ |  |  |  |  |  |  |
+| `masters.supplier.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  | ✔ |  |  |  |  |  |  |
+| `masters.supplier.update` |  |  |  |  |  | ✔ |  |  |  |  | ✔ |  |  |  |  |  | ✔ |  |  |  |  |  |  |
+| `masters.supplier.view` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ | ✔ | ✔ |  |  |  | ✔ |  |  | ✔ |  |  |  |
 | `purchase.grn.create` |  |  |  |  |  | ✔ |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |  |
 | `purchase.grn.export` |  | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `purchase.grn.update` |  |  |  |  |  | ✔ |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -386,12 +395,12 @@ Deny by default: anything not listed is refused on the server (API, exports, att
 
 | Permission | it_admin | gm | hr | maintenance_manager | planner | purchase_manager | qc_manager | sales_manager | security_supervisor | store_manager | owner | accounts | artwork | dispatch | operator | production_supervisor | purchase_supervisor | qc_inspector | sales_exec | security_guard | store_staff | technician | tv_viewer |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `approvals.policy.manage` | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `approvals.view` |  | ✔ |  |  | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `audit.verify` | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `audit.view` | ✔ | ✔ |  |  |  |  |  |  |  |  | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `core.approvalrequest.export` | ✔ | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `core.approvalrequest.view` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |  |
+| `core.department.view` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |  |
 | `core.userlookup.export` | ✔ | ✔ |  |  | ✔ | ✔ | ✔ |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |  |
 | `core.userlookup.view` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |  |
 | `outbox.approve` |  |  |  |  |  | ✔ |  |  |  |  | ✔ | ✔ |  |  |  |  |  |  |  |  |  |  |  |

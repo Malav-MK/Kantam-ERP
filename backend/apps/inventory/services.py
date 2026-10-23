@@ -103,6 +103,24 @@ def reverse_move(move, user, reason):
     return rev
 
 
+def undo_move(move):
+    """Owner deleting a wrongly posted movement: take it back off the balances first."""
+    if move.to_location is not None and not move.to_location.is_virtual:
+        bal = _lock_balance(move.item, move.lot, move.to_location)
+        if bal.qty < move.qty:
+            raise BusinessRuleError(
+                f"Only {bal.qty} of lot {move.lot.doc_no} is left at {move.to_location.code}; {move.doc_no} put {move.qty} there. "
+                "Some of it has already been used - delete or reverse those later movements first.",
+                "negative_stock", {"available": str(bal.qty), "requested": str(move.qty)},
+            )
+        bal.qty -= move.qty
+        bal.save(update_fields=["qty", "updated_at"])
+    if move.from_location is not None and not move.from_location.is_virtual:
+        bal = _lock_balance(move.item, move.lot, move.from_location)
+        bal.qty += move.qty
+        bal.save(update_fields=["qty", "updated_at"])
+
+
 def create_lot(*, item, source, user, quality_state="pending", **fields):
     return Lot.objects.create(item=item, source=source, quality_state=quality_state, created_by=user, owner=user, **fields)
 

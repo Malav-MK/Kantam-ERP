@@ -1,5 +1,5 @@
 """Role editor (simple permission grid), owner role protection and the removal of email addresses."""
-from apps.core.models import ApprovalRequest, OutboxMessage, Role, User
+from apps.core.models import OutboxMessage, Role, User
 from apps.core.rbac import BASELINE_PERMISSIONS
 from apps.core.rbac_sync import sync_permissions
 from apps.masters.models import Contact
@@ -41,17 +41,13 @@ class RoleEditorTests(PlantTestCase):
         it1 = make_user("itadm", ["it_admin"], "IT")
         custom = Role.objects.create(code="counter", name="Counter", level="staff")
         c = self.client_for(it1)
-        # Change role permissions is maker-checked for non-owners; the dry run still validates.
         bad = c.post(f"/api/r/core.role/{custom.pk}/actions/set_permissions", {"permissions": ["commercial.price.view"], "reason": "Need prices"})
         self.assertEqual(bad.json()["error"], "privilege_escalation")
-        held = c.post(f"/api/r/core.role/{custom.pk}/actions/set_permissions", {"permissions": ["security.devices.manage"], "reason": "Device admin"})
-        self.assertEqual(held.status_code, 202, held.content)
-        approved = self.client_for(self.owner).post(f"/api/r/core.approvalrequest/{held.json()['approval']}/actions/approve")
-        self.assertEqual(approved.status_code, 200, approved.content)
+        ok = c.post(f"/api/r/core.role/{custom.pk}/actions/set_permissions", {"permissions": ["security.devices.manage"], "reason": "Device admin"})
+        self.assertEqual(ok.status_code, 200, ok.content)  # applies directly
         codes = set(custom.permissions.values_list("code", flat=True))
         self.assertIn("security.devices.manage", codes)
         self.assertTrue(set(c for c in BASELINE_PERMISSIONS if Role.objects.filter(permissions__code=c).exists()) <= codes | set(BASELINE_PERMISSIONS))
-        self.assertEqual(ApprovalRequest.objects.get(pk=held.json()["approval"]).status, "approved")
 
     def test_permission_grid_is_for_role_administrators_only(self):
         grid = self.client_for(self.owner).get("/api/roles/permission-matrix").json()
@@ -90,10 +86,10 @@ class RoleDeleteAndDepartmentTests(PlantTestCase):
     def test_owner_deletes_built_in_role_and_upgrade_keeps_it_deleted(self):
         owner = self.client_for(self.owner)
         role = Role.objects.get(code="tv_viewer")
-        blocked = owner.post(f"/api/r/core.role/{role.pk}/actions/delete_role", {"reason": "Not used here"})
+        blocked = owner.delete(f"/api/r/core.role/{role.pk}", {"reason": "Not used here"})
         self.assertEqual(blocked.json()["error"], "role_in_use")  # the tv user still holds it
         self.tv.role_grants.all().delete()
-        r = owner.post(f"/api/r/core.role/{role.pk}/actions/delete_role", {"reason": "Not used here"})
+        r = owner.delete(f"/api/r/core.role/{role.pk}", {"reason": "Not used here"})
         self.assertEqual(r.status_code, 200, r.content)
         sync_permissions()  # what an upgrade does
         role.refresh_from_db()
@@ -103,16 +99,19 @@ class RoleDeleteAndDepartmentTests(PlantTestCase):
         codes = [x["code"] for x in owner.get("/api/r/core.role", page_size=100).json()["results"]]
         self.assertNotIn("tv_viewer", codes)
         owner_role = Role.objects.get(code="owner")
-        self.assertIn(owner.post(f"/api/r/core.role/{owner_role.pk}/actions/delete_role", {"reason": "Try it"}).status_code, (403, 409))
+        self.assertIn(owner.delete(f"/api/r/core.role/{owner_role.pk}", {"reason": "Try it"}).status_code, (403, 409))
 
-    def test_only_owner_deletes_roles(self):
+    def test_owner_and_admin_delete_roles(self):
         custom = Role.objects.create(code="temp", name="Temp", level="staff")
-        it1 = make_user("itadm2", ["it_admin"], "IT")
-        r = self.client_for(it1).post(f"/api/r/core.role/{custom.pk}/actions/delete_role", {"reason": "Cleanup"})
+        r = self.client_for(self.sales_mgr).delete(f"/api/r/core.role/{custom.pk}", {"reason": "Cleanup"})
         self.assertIn(r.status_code, (403, 409))
-        r = self.client_for(self.owner).post(f"/api/r/core.role/{custom.pk}/actions/delete_role", {"reason": "Cleanup"})
+        it1 = make_user("itadm2", ["it_admin"], "IT")
+        r = self.client_for(it1).delete(f"/api/r/core.role/{custom.pk}", {"reason": "Cleanup"})
         self.assertEqual(r.status_code, 200, r.content)
         self.assertFalse(Role.objects.filter(code="temp").exists())
+        temp2 = Role.objects.create(code="temp2", name="Temp 2", level="staff")
+        r = self.client_for(self.owner).delete(f"/api/r/core.role/{temp2.pk}", {"reason": "Cleanup"})
+        self.assertEqual(r.status_code, 200, r.content)
 
     def test_create_department_without_choosing_a_site(self):
         owner = self.client_for(self.owner)

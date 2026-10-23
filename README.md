@@ -1,4 +1,4 @@
-# Kantam ERP + CRM
+# Kantam ERP + CRM MK
 
 Integrated plant ERP and CRM for **Kantam Kontainers LLP** (IML packaging, Bareja), built against the
 *ERP + CRM designer brief v5.0*. It is one connected system for sales, artwork, planning, stores,
@@ -29,7 +29,7 @@ Each transaction is entered once and its effect carries through the organisation
 | `gateway/` | Node zero-trust gateway (also serves the built UI) |
 | `frontend/` | React 18 + TypeScript (Vite). Workspaces render from server metadata |
 | `deploy/` | Windows one-script installer (`deploy/windows`), Docker Compose for Linux servers, encrypted backup / restore scripts |
-| `docs/` | Permission matrix, requirements traceability, [SECURITY.md](docs/SECURITY.md) (OWASP mapping, RBAC, maker/checker) |
+| `docs/` | Permission matrix, requirements traceability, [SECURITY.md](docs/SECURITY.md) (OWASP mapping, RBAC, approvals) |
 
 ## How "dynamic" works
 
@@ -56,7 +56,7 @@ Nothing is trusted because of where it sits on the network. Each request is veri
 | Every request re-checks the session (revocation, idle/absolute timeout), device, user state and **role version**, so a permission change applies on the next call | Django | p.27 |
 | Micro-segmentation: Django rejects any request not HMAC-signed by the gateway (timestamped, client IP bound) and has no published port | both | p.28 |
 | RBAC deny-by-default on every endpoint, export, attachment and action. Row scope (e.g. sales execs see own leads; hosts see own visitors). Field projection (prices, supplier rates, personal data) | Django | p.27, p.41 |
-| Maker/checker: configurable approval policies hold sensitive creates/edits/actions until 1–3 *different* authorised checkers approve; re-validated at execution; stale changes refused. The owner is super admin and is exempt. See [SECURITY.md](docs/SECURITY.md) | Django + UI | p.19, p.62 |
+| Changes apply directly and are audited (generic maker/checker removed). A second person still approves post-lock SO amendments, margin exceptions, extra issues and count adjustments. The owner is super admin. See [SECURITY.md](docs/SECURITY.md) | Django + UI | p.19, p.62 |
 | Hash-chained audit log with `verify_chain()`; no hard deletes of posted records | Django | p.19 |
 | Evidence files: magic-byte validation, EXIF/GPS stripped, SHA-256, random names outside the web root, scope re-checked on every view, locked after closure | Django | p.41 |
 | CSP, HSTS, no-store caching, no CORS, cross-site requests refused, rate limits, sanitised TV projection | gateway | p.26, p.28 |
@@ -145,7 +145,7 @@ The backend suite runs the brief's acceptance scenarios through the API as the r
 
 - multi-flavour order demand
 - 24-hour lock with an approved amendment that keeps version 1
-- maker/checker
+- second-person approval of workflow exceptions
 - wrong label blocked at issue
 - issue retried with the same idempotency key
 - cancelled PR return plus linked reissue

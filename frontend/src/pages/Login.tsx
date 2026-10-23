@@ -73,7 +73,7 @@ export default function Login() {
       <div className="login-card">
         <div className="login-brand">
           <KantamLogo className="login-logo" />
-          <div className="muted small">ERP + CRM · Bareja plant</div>
+          <div className="muted small">Bareja Plant</div>
         </div>
 
         {step === "checking" && <p className="muted">Checking this device…</p>}

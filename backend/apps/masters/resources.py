@@ -19,6 +19,16 @@ class MasterResource(Resource):
     ordering = ["code"]
 
 
+def next_code(model, width=2):
+    """Next free numeric code: 01, 02 ... (keeps the width already in use, e.g. 007 -> 008)."""
+    codes = [c for c in model.objects.values_list("code", flat=True) if c.isdigit()]
+    width = max([width] + [len(c) for c in codes])
+    n = max([int(c) for c in codes], default=0) + 1
+    while model.objects.filter(code=str(n).zfill(width)).exists():
+        n += 1
+    return str(n).zfill(width)
+
+
 @register
 class CustomerResource(MasterResource):
     key = "masters.customer"
@@ -30,10 +40,18 @@ class CustomerResource(MasterResource):
                    "freight_basis", "credit_limit", "advance_required_pct", "lead_time_days", "owner", "active"]
     search_fields = ["code", "name", "industry", "plant_branch"]
     filter_fields = ["active", "owner"]
+    server_defaults = ["code"]
+    field_help = {"code": "Filled in automatically with the next number; you can change it."}
     field_permissions = {"credit_limit": "commercial.price.view"}
     inlines = [{"resource": "masters.contact", "fk": "customer", "label": "Contacts"}]
     help = {"why": "One customer record shared by CRM, orders, dispatch and complaints - never duplicated.",
             "boundary": "Historical rates are reference data, not current pricing."}
+
+    def form_defaults(self, user):
+        return {"code": next_code(Customer)}
+
+    def before_create(self, request, data):
+        data["code"] = str(data.get("code") or "").strip() or next_code(Customer)
 
     def extra_detail(self, request, obj):
         from apps.sales.services import customer_timeline
@@ -44,6 +62,7 @@ class CustomerResource(MasterResource):
 class SupplierResource(MasterResource):
     key = "masters.supplier"
     model = Supplier
+    module = "purchase"  # suppliers are managed with purchasing, not in Masters
     label = "Suppliers"
     singular = "Supplier"
     list_fields = ["code", "name", "category", "lead_time_days", "active"]
@@ -85,6 +104,36 @@ class ItemResource(MasterResource):
 
 
 @register
+class LabelItemResource(MasterResource):
+    """IML label stock items, kept on their own screen so labels can be set up before linking them to artwork."""
+
+    key = "masters.labelitem"
+    model = Item
+    canonical = False
+    label = "Label items"
+    singular = "Label item"
+    list_fields = ["code", "name", "group", "stock_uom", "min_stock", "default_supplier", "active"]
+    form_fields = ["code", "name", "group", "stock_uom", "min_stock", "safety_stock", "moq", "order_multiple", "lead_time_days",
+                   "default_supplier", "standard_cost", "legacy_code", "active"]
+    search_fields = ["code", "name", "group", "legacy_code"]
+    filter_fields = ["active", "group"]
+    server_defaults = ["stock_uom"]
+    field_permissions = {"standard_cost": "commercial.cost.view"}
+    field_help = {"group": "Label group / classification, e.g. Round 500 lids", "stock_uom": "Leave empty for pieces."}
+    inlines = [{"resource": "masters.artwork", "fk": "label_item", "label": "Artworks printed on this label"}]
+    help = {"why": "Labels are counted per piece and linked to an approved artwork revision, so the wrong label cannot be issued to a job.",
+            "steps": "Add the label item here, then pick it as the label item on the artwork (Masters → Artwork & labels)."}
+
+    def scope(self, request, qs):
+        return qs.filter(kind="label")
+
+    def before_create(self, request, data):
+        data["kind"] = "label"
+        data["whole_units"] = True
+        data["stock_uom"] = data.get("stock_uom") or "pcs"
+
+
+@register
 class UOMConversionResource(MasterResource):
     key = "masters.uomconversion"
     in_nav = False
@@ -118,8 +167,8 @@ class ProductResource(MasterResource):
 @register
 class ProductComponentResource(MasterResource):
     key = "masters.productcomponent"
-    in_nav = False
     model = ProductComponent
+    deleted_with_parent = True
     label = "Product components"
     singular = "Component"
     title_field = "component_type"
@@ -127,6 +176,9 @@ class ProductComponentResource(MasterResource):
     list_fields = ["product", "component_type", "item", "qty_per_set", "weight_g", "iml", "labels_per_piece", "procured"]
     form_fields = ["product", "component_type", "item", "qty_per_set", "weight_g", "iml", "labels_per_piece", "procured"]
     filter_fields = ["product", "component_type"]
+    search_fields = ["product__code", "product__name", "item__code", "item__name"]
+    help = {"why": "What a product is made of: container, lid, handle ... each with its moulded item and weight.",
+            "steps": "Add one row per component, or open the product and use its Components tab."}
 
 
 def _artwork_impact(artwork):
@@ -136,7 +188,7 @@ def _artwork_impact(artwork):
     from apps.purchase.models import POLine
 
     label_stock = list(
-        StockBalance.objects.filter(lot__artwork=artwork, qty__gt=0).values("item__code", "lot__code", "location__code", "qty")
+        StockBalance.objects.filter(lot__artwork=artwork, qty__gt=0).values("item__code", "lot__doc_no", "location__code", "qty")
     )
     open_po = list(
         POLine.objects.filter(artwork=artwork, status__in=["open", "partial"]).values("po__doc_no", "item__code", "qty", "received_qty")
@@ -155,16 +207,26 @@ class ArtworkResource(MasterResource):
     singular = "Artwork revision"
     title_field = "code"
     ordering = ["code", "-revision"]
-    list_fields = ["code", "revision", "product", "component_type", "flavour", "customer", "status", "finish", "label_item"]
+    list_fields = ["code", "revision", "product", "component_type", "flavour", "customers", "status", "finish", "label_item"]
     create_only_fields = ["code", "product", "component_type"]
-    form_fields = ["customer", "flavour", "common_design", "label_item", "kld_reference", "dimensions", "colour_reference", "finish",
-                   "supplier", "customer_approval_ref", "customer_approved_on"]
-    readonly_fields = ["internal_approved_by", "released_at", "supersedes"]
+    form_fields = ["customers", "flavour", "common_design", "label_item", "kld_reference", "height_mm", "width_mm", "colour_reference", "finish",
+                   "finish_other", "supplier", "customer_approval_ref", "customer_approved_on"]
+    required_fields = ["finish_other"]
+    show_if = {"finish_other": {"finish": "other"}}
+    filter_defaults = {"supplier": {"category": "labels"}}
+    required_uploads = [
+        {"purpose": "design_pdf", "label": "Designed PDF", "accept": "application/pdf"},
+        {"purpose": "customer_approval", "label": "Customer approval photo", "accept": "image/jpeg,image/png"},
+    ]
+    readonly_fields = ["size", "internal_approved_by", "released_at", "supersedes"]
     search_fields = ["code", "flavour", "kld_reference"]
-    filter_fields = ["product", "component_type", "status", "customer", "flavour", "label_item"]
+    filter_fields = ["product", "component_type", "status", "customers", "flavour", "label_item"]
     depends = {"label_item": {"kind": "=label"}}
     field_help = {
         "revision": "Each change is a new revision; production may only use an approved revision.",
+        "height_mm": "Label height in millimetres, e.g. 98.25",
+        "width_mm": "Label width in millimetres, e.g. 506",
+        "label_item": "The label stock item (Masters → Label items) printed with this design.",
         "customer_approval_ref": "Never infer approval from a draft image or informal filename (p.8).",
     }
     help = {
@@ -180,10 +242,30 @@ class ArtworkResource(MasterResource):
             return "Approved/obsolete artwork is frozen. Create a new revision to change it."
         return None
 
+    @staticmethod
+    def _check_finish(finish, data):
+        if finish == "other":
+            if not str(data.get("finish_other") or "").strip():
+                raise BusinessRuleError("Describe the finish in 'Other finish'.", "validation", {"finish_other": "required"})
+        else:
+            data["finish_other"] = ""
+
+    def before_create(self, request, data):
+        self._check_finish(data.get("finish"), data)
+
+    def before_update(self, request, obj, data):
+        data.setdefault("finish_other", obj.finish_other)
+        self._check_finish(data.get("finish", obj.finish), data)
+
     def _advance(request, obj, data):
+        from apps.core.attachments import attachments_for
+
         flow = ArtworkResource.FLOW
         if obj.status not in flow or obj.status == "approved":
             raise BusinessRuleError("Artwork cannot advance from this state.", "invalid_state")
+        missing = [u["label"] for u in ArtworkResource.required_uploads if not attachments_for(obj, u["purpose"]).exists()]
+        if missing:
+            raise BusinessRuleError(f"Attach {' and '.join(missing)} first (Attachments, below).", "upload_required", {"missing": missing})
         nxt = flow[flow.index(obj.status) + 1]
         if nxt == "customer_approval":
             obj.internal_approved_by = request.user
@@ -222,10 +304,11 @@ class ArtworkResource(MasterResource):
         latest = Artwork.objects.filter(code=obj.code).order_by("-revision").first()
         new = Artwork.objects.create(
             code=obj.code, revision=latest.revision + 1, product=obj.product, component_type=obj.component_type,
-            customer=obj.customer, flavour=obj.flavour, common_design=obj.common_design, label_item=obj.label_item,
-            kld_reference=obj.kld_reference, dimensions=obj.dimensions, colour_reference=obj.colour_reference,
-            finish=obj.finish, supplier=obj.supplier, status="draft", supersedes=obj, created_by=request.user,
+            flavour=obj.flavour, common_design=obj.common_design, label_item=obj.label_item,
+            kld_reference=obj.kld_reference, height_mm=obj.height_mm, width_mm=obj.width_mm, colour_reference=obj.colour_reference,
+            finish=obj.finish, finish_other=obj.finish_other, supplier=obj.supplier, status="draft", supersedes=obj, created_by=request.user,
         )
+        new.customers.set(obj.customers.all())
         audit.record("artwork_revision_created", "masters.artwork", new, reason=data.get("reason", ""))
         return new
 

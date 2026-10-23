@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import Icon from "./Icon";
 import { toneFor } from "../format";
 
@@ -8,13 +8,18 @@ export function Pill({ value, label }: { value?: string; label?: string }) {
 }
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Only the top-most dialog closes (a "Create new" form can open over another form).
+    const onKey = (e: KeyboardEvent) => {
+      const all = document.querySelectorAll(".overlay");
+      if (e.key === "Escape" && all[all.length - 1] === ref.current) onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div ref={ref} className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <header><h3>{title}</h3><button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" size={20} /></button></header>
         <div className="modal-body">{children}</div>
@@ -35,11 +40,11 @@ export function Help({ help }: { help?: { why?: string; steps?: string; effect?:
   if (!help || !Object.keys(help).length) return null;
   return (
     <details className="help">
-      <summary>Help / why</summary>
-      {help.why && <p><b>Why:</b> {help.why}</p>}
-      {help.steps && <p><b>Steps:</b> {help.steps}</p>}
-      {help.effect && <p><b>Effect:</b> {help.effect}</p>}
-      {help.boundary && <p><b>Important boundary:</b> {help.boundary}</p>}
+      <summary>How to use this screen</summary>
+      {help.why && <p><b>What it is for:</b> {help.why}</p>}
+      {help.steps && <p><b>How to do it:</b> {help.steps}</p>}
+      {help.effect && <p><b>What happens next:</b> {help.effect}</p>}
+      {help.boundary && <p><b>Good to know:</b> {help.boundary}</p>}
     </details>
   );
 }

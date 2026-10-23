@@ -41,7 +41,6 @@ CAPABILITIES = {
     "maintenance.pm.approve": ("tasks", "Approve / activate PM plans"),
     "outbox.approve": ("core", "Approve outbound WhatsApp messages"),
     "approvals.view": ("core", "See approval queue"),
-    "approvals.policy.manage": ("core", "Propose / approve maker-checker policies"),
     "audit.view": ("core", "View audit history"),
     "audit.verify": ("core", "Verify audit hash-chain integrity"),
     # Security administration
@@ -67,7 +66,7 @@ ROLES = {
     "it_admin": {
         "name": "Security / IT administrator",
         "level": "admin",
-        "include": ["security.*", "audit.view", "audit.verify", "core.*", "approvals.policy.manage"],
+        "include": ["security.*", "audit.view", "audit.verify", "core.*"],
         "exclude": [],
         "description": "Users, roles, devices and sessions. No commercial or production data.",
     },

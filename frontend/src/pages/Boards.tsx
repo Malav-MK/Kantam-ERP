@@ -6,6 +6,7 @@ import { Empty, ErrorBox, Modal, Pill, Stat } from "../components/ui";
 import { fmtDate, fmtDateTime } from "../format";
 import KantamLogo from "../components/KantamLogo";
 import Icon from "../components/Icon";
+import { Screen, useScreens } from "../components/Layout";
 
 function usePoll<T>(url: string, ms = 60_000, params?: Record<string, any>) {
   const [data, setData] = useState<T | null>(null);
@@ -371,6 +372,27 @@ const WORK_TABS: { key: WorkTab; label: string }[] = [
 ];
 type WorkRow = { id: string; ref: string; title: string; source?: string; to: string; due?: string; originalDue?: string; state: string; kind: string };
 
+/** Every screen the user can open, grouped like the menu, so nothing is hidden behind collapsed sections. */
+function GoTo() {
+  const screens = useScreens().filter((x) => x.to !== "/");
+  const groups = new Map<string, Screen[]>();
+  for (const x of screens) groups.set(x.group, [...(groups.get(x.group) ?? []), x]);
+  if (!screens.length) return null;
+  return (
+    <section>
+      <h2 className="section-title">Go to</h2>
+      <div className="goto">
+        {[...groups.entries()].map(([group, list]) => (
+          <div key={group} className="card goto-card">
+            <h4><Icon name={list[0].icon} size={16} />{group}</h4>
+            {list.map((x) => <Link key={x.to} to={x.to}>{x.label}</Link>)}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** Design book UI-02: one prioritised personal inbox. Seen is not done; Submitted waits for verification. */
 export function MyWork() {
   const { profile, can } = useAuth();
@@ -451,6 +473,7 @@ export function MyWork() {
           </table></div>
         )}
       </section>
+      <GoTo />
     </div>
   );
 }

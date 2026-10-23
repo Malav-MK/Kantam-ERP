@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ApiError, get, openProtected } from "../api";
 import { useAuth } from "../auth";
 import { resourceMeta, FieldInput } from "../components/Field";
-import { ActionDialog, RecordForm } from "../components/Forms";
+import { ActionDialog, DeleteDialog, RecordForm } from "../components/Forms";
 import { Attachments, History } from "../components/Evidence";
 import { Empty, ErrorBox, Help, Modal, Pill } from "../components/ui";
 import Icon from "../components/Icon";
@@ -31,11 +31,11 @@ function useMeta(key: string) {
   return { meta, error };
 }
 
-export function DataTable({ meta, rows, onOpen }: { meta: ResourceMeta; rows: Row[]; onOpen: (r: Row) => void }) {
+export function DataTable({ meta, rows, onOpen, onDelete }: { meta: ResourceMeta; rows: Row[]; onOpen: (r: Row) => void; onDelete?: (r: Row) => void }) {
   return (
     <div className="table-wrap">
       <table className="data">
-        <thead><tr>{meta.list_fields.map((f) => <th key={f}>{meta.fields[f]?.label ?? f}</th>)}</tr></thead>
+        <thead><tr>{meta.list_fields.map((f) => <th key={f}>{meta.fields[f]?.label ?? f}</th>)}{onDelete && <th className="row-tools"><span className="sr-only">Delete</span></th>}</tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} onClick={() => onOpen(r)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen(r)}>
@@ -44,6 +44,12 @@ export function DataTable({ meta, rows, onOpen }: { meta: ResourceMeta; rows: Ro
                   {f === meta.status_field ? <Pill value={r[f]} label={display(r, f, meta.fields[f])} /> : display(r, f, meta.fields[f])}
                 </td>
               ))}
+              {onDelete && (
+                <td className="row-tools">
+                  <button className="icon-btn danger" title="Delete" aria-label={`Delete ${titleOf(r, meta.title_field)}`}
+                    onClick={(e) => { e.stopPropagation(); onDelete(r); }}><Icon name="trash" size={16} /></button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -61,6 +67,8 @@ export function ResourceList() {
   const [loadErr, setLoadErr] = useState("");
   const [creating, setCreating] = useState(false);
   const [action, setAction] = useState<ActionMeta | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  const [notice, setNotice] = useState("");
   const [search, setSearch] = useState(params.get("search") ?? "");
   const page = Number(params.get("page") ?? 1);
 
@@ -115,16 +123,25 @@ export function ResourceList() {
             ) : <input type="date" value={params.get(f.name) ?? ""} onChange={(e) => setParam(f.name, e.target.value)} />}
           </label>
         ))}
-        {meta.filters.filter((f) => f.type === "fk" && f.target).slice(0, 3).map((f) => (
+        {meta.filters.filter((f) => (f.type === "fk" || f.type === "fk_multi") && f.target).slice(0, 3).map((f) => (
           <label key={f.name} className="filter wide">
             <span>{f.label}</span>
-            <FieldInput meta={{ ...f, readonly: false }} value={params.get(f.name)} values={{}} onChange={(v) => setParam(f.name, v)} />
+            <FieldInput meta={{ ...f, type: "fk", readonly: false }} value={params.get(f.name)} values={{}} onChange={(v) => setParam(f.name, v)} />
           </label>
         ))}
       </div>
       <ErrorBox error={loadErr} />
-      {data && data.results.length === 0 && <Empty>No records{params.toString() ? " match these filters" : " yet"}.</Empty>}
-      {data && data.results.length > 0 && <DataTable meta={meta} rows={data.results} onOpen={(r) => nav(`/r/${key}/${r.id}`)} />}
+      {notice && <div className="alert ok" role="status">{notice}</div>}
+      {data && data.results.length === 0 && (
+        <Empty>
+          {params.toString() ? "Nothing matches these filters." : "Nothing here yet."}
+          {params.toString() ? <div><button className="btn small" onClick={() => { setSearch(""); setParams(new URLSearchParams()); }}>Clear filters</button></div>
+            : meta.can_create && <div><button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} />Add the first {meta.singular.toLowerCase()}</button></div>}
+        </Empty>
+      )}
+      {data && data.results.length > 0 && <p className="tiny muted">Click a row to open it.</p>}
+      {data && data.results.length > 0 && <DataTable meta={meta} rows={data.results} onOpen={(r) => nav(`/r/${key}/${r.id}`)}
+        onDelete={meta.can_delete ? setDeleting : undefined} />}
       {data && data.count > 50 && (
         <div className="pager">
           <button className="btn" disabled={page <= 1} onClick={() => setParam("page", String(page - 1))}>Previous</button>
@@ -145,6 +162,11 @@ export function ResourceList() {
         setAction(null);
         if (r?._resource && r.id) nav(`/r/${r._resource}/${r.id}`); else load();
       }} />}
+      {deleting && <DeleteDialog meta={meta} record={deleting} onClose={() => setDeleting(null)} onDeleted={() => {
+        setNotice(`${titleOf(deleting, meta.title_field)} deleted.`);
+        setDeleting(null);
+        load();
+      }} />}
     </div>
   );
 }
@@ -154,6 +176,7 @@ function InlineTable({ spec, parent, parentKey }: { spec: { resource: string; fk
   const [meta, setMeta] = useState<ResourceMeta | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState<Row | null>(null);
   const load = useCallback(() => {
     get<{ results: Row[] }>(`/api/r/${spec.resource}`, { [spec.fk]: parent.id, page_size: 200 }).then((r) => setRows(r.results)).catch(() => setRows([]));
   }, [spec, parent.id]);
@@ -165,8 +188,10 @@ function InlineTable({ spec, parent, parentKey }: { spec: { resource: string; fk
         <h4>{spec.label}</h4>
         {meta.can_create && <button className="btn small" onClick={() => setAdding(true)}><Icon name="plus" size={14} />Add</button>}
       </header>
-      {rows.length ? <DataTable meta={{ ...meta, list_fields: meta.list_fields.filter((f) => f !== spec.fk) }} rows={rows} onOpen={(r) => nav(`/r/${spec.resource}/${r.id}`)} />
+      {rows.length ? <DataTable meta={{ ...meta, list_fields: meta.list_fields.filter((f) => f !== spec.fk) }} rows={rows} onOpen={(r) => nav(`/r/${spec.resource}/${r.id}`)}
+        onDelete={meta.can_delete ? setDeleting : undefined} />
         : <p className="muted small">None yet.</p>}
+      {deleting && <DeleteDialog meta={meta} record={deleting} onClose={() => setDeleting(null)} onDeleted={() => { setDeleting(null); load(); }} />}
       {adding && (
         <Modal title={`Add to ${spec.label.toLowerCase()}`} onClose={() => setAdding(false)} wide>
           <RecordForm meta={meta} defaults={{ [spec.fk]: parent.id }} parent={parent} onCancel={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
@@ -182,7 +207,7 @@ function ExtraPanel({ extra }: { extra: Record<string, any> }) {
   if (!entries.length) return null;
   return (
     <section className="card">
-      <header className="card-head"><h4>Live position & calculation basis</h4></header>
+      <header className="card-head"><h4>More information</h4></header>
       <div className="extra">
         {entries.map(([k, v]) => (
           <div key={k} className="extra-item">
@@ -229,6 +254,7 @@ export function ResourceDetail() {
   const [loadErr, setLoadErr] = useState("");
   const [editing, setEditing] = useState(false);
   const [action, setAction] = useState<ActionMeta | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [rev, setRev] = useState(0);
 
   const load = useCallback(() => {
@@ -247,7 +273,7 @@ export function ResourceDetail() {
     <div className="page">
       <header className="page-head">
         <div>
-          <div className="crumbs"><Link to={`/r/${key}`}>{meta.label}</Link></div>
+          <div className="crumbs"><Link to={`/r/${key}`}>← Back to {meta.label}</Link></div>
           <h1>{titleOf(row, meta.title_field)} {meta.status_field && <Pill value={row[meta.status_field]} label={display(row, meta.status_field, meta.fields[meta.status_field])} />}</h1>
           {row._meta?.locked_reason && <div className="lock"><Icon name="lock" size={15} /> {row._meta.locked_reason}</div>}
           {!!row._meta?.pending_approvals?.length && (
@@ -258,14 +284,8 @@ export function ResourceDetail() {
         <div className="row gap wrap">
           {(DOCS[key] ?? []).map((d) => <button key={d.kind} className="btn" onClick={() => openProtected(`/api/docs/${d.kind}/${id}`)}><Icon name="printer" size={16} />{d.label}</button>)}
           {row._meta?.editable && meta.form_fields.length > 0 && <button className="btn" onClick={() => setEditing(true)}><Icon name="edit" size={16} />Edit</button>}
-          {available.map((a) => {
-            const needs = meta.approval_rules?.some((r) => r.operation === "action" && r.action === a.name);
-            return (
-              <button key={a.name} className={`btn ${a.tone}`} onClick={() => setAction(a)} title={needs ? "Needs checker approval" : undefined}>
-                {a.label}{needs && <span className="needs-approval"><Icon name="check" size={12} />approval</span>}
-              </button>
-            );
-          })}
+          {available.map((a) => <button key={a.name} className={`btn ${a.tone}`} onClick={() => setAction(a)}>{a.label}</button>)}
+          {row._meta?.deletable && <button className="btn danger" onClick={() => setDeleting(true)}><Icon name="trash" size={16} />Delete</button>}
         </div>
       </header>
       <Help help={meta.help} />
@@ -293,6 +313,7 @@ export function ResourceDetail() {
         setRev((x) => x + 1);
         if (r?._resource && r.id && (r._resource !== key || r.id !== id)) nav(`/r/${r._resource}/${r.id}`); else load();
       }} />}
+      {deleting && <DeleteDialog meta={meta} record={row} onClose={() => setDeleting(false)} onDeleted={() => nav(`/r/${key}`, { replace: true })} />}
     </div>
   );
 }

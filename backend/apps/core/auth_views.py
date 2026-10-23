@@ -374,6 +374,7 @@ THEME_MODES = {"light", "dark", "system"}
 THEME_PRESETS = {"kantam", "book", "steel", "blue", "green", "custom"}
 SIDEBAR_STYLES = {"dark", "navy", "light", "brand"}
 DENSITIES = {"comfortable", "compact"}
+TEXT_SIZES = {"normal", "large", "xlarge"}
 HEX = __import__("re").compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -385,7 +386,7 @@ class PreferencesView(APIView):
     def patch(self, request):
         data = request.data if isinstance(request.data, dict) else {}
         prefs = dict(request.user.ui_preferences or {})
-        checks = {"mode": THEME_MODES, "preset": THEME_PRESETS, "sidebar": SIDEBAR_STYLES, "density": DENSITIES}
+        checks = {"mode": THEME_MODES, "preset": THEME_PRESETS, "sidebar": SIDEBAR_STYLES, "density": DENSITIES, "text": TEXT_SIZES}
         for key, allowed in checks.items():
             if key in data:
                 if data[key] not in allowed:

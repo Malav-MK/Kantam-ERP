@@ -43,7 +43,7 @@ export function ApprovalsInbox() {
       <header className="page-head">
         <div>
           <h1><Icon name="check" size={22} /> Approvals</h1>
-          <p className="muted small">Maker / checker: sensitive changes are held until a different authorised person approves them. Nothing changes before that.</p>
+          <p className="muted small">Requests that need a second person: sales order changes after lock, stock-count adjustments, extra material issues and quotation margin exceptions.</p>
         </div>
       </header>
       <div className="seg">{TABS.map((t) => <button key={t.key} className={tab === t.key ? "on" : ""} onClick={() => setTab(t.key)}>{t.label}</button>)}</div>
@@ -51,11 +51,11 @@ export function ApprovalsInbox() {
       {!rows.length ? <Empty>{tab === "inbox" ? "Nothing is waiting for your approval." : "No requests."}</Empty> : (
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>Request</th><th>Maker</th><th>Submitted</th><th>Approvals</th><th>Status</th><th>Expires</th></tr></thead>
+            <thead><tr><th>Request</th><th>Requested by</th><th>Submitted</th><th>Approvals</th><th>Status</th><th>Expires</th></tr></thead>
             <tbody>
               {rows.map((a) => (
                 <tr key={a.id} onClick={() => nav(`/approvals/${a.id}`)}>
-                  <td><b>{a.summary}</b><div className="small muted">{a.kind === "policy" ? "Maker / checker policy" : a.kind.replace(/_/g, " ")}</div></td>
+                  <td><b>{a.summary}</b><div className="small muted">{a.kind.replace(/_/g, " ")}</div></td>
                   <td>{a.created_by_label}</td>
                   <td>{fmtDateTime(a.created_at)}</td>
                   <td>{a.required_approvals > 1 ? `needs ${a.required_approvals}` : "1 checker"}</td>
@@ -114,7 +114,7 @@ export function ApprovalDetail() {
       </header>
 
       <section className="card">
-        <header className="card-head"><h4>Maker's reason</h4></header>
+        <header className="card-head"><h4>Reason given</h4></header>
         <p>{a.reason || <span className="muted">—</span>}</p>
         {a.amount && <p className="small">Amount evaluated by policy: <b>₹{Number(a.amount).toLocaleString("en-IN")}</b></p>}
       </section>

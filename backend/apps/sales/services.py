@@ -33,7 +33,8 @@ def validate_line(line):
             continue
         if art.product_id != product.id or art.component_type != ctype:
             raise BusinessRuleError(f"{ctype.title()} artwork {art} does not belong to {product.code} {ctype}.", "incompatible_artwork")
-        if art.customer_id and art.customer_id != line.so.customer_id and not art.common_design:
+        customers = {c.pk for c in art.customers.all()}
+        if customers and line.so.customer_id not in customers and not art.common_design:
             raise BusinessRuleError(f"Artwork {art} is another customer's design.", "incompatible_artwork")
         if line.flavour and art.flavour and art.flavour != line.flavour:
             raise BusinessRuleError(f"Artwork {art} is for flavour '{art.flavour}', line is '{line.flavour}'.", "incompatible_artwork")

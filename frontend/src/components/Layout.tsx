@@ -14,15 +14,15 @@ type NavItem = { to: string; label: string; perm: string[]; icon: IconName };
 // Design book p.04: personal work first, then factory flow, then role-scoped support.
 const PERSONAL: NavItem[] = [
   { to: "/", label: "My work", perm: [], icon: "home" },
-  { to: "/r/tasks.task", label: "Follow-up Centre", perm: ["tasks.task.view"], icon: "flag" },
+  { to: "/r/tasks.task", label: "Tasks & follow-ups", perm: ["tasks.task.view"], icon: "flag" },
   { to: "/approvals", label: "Approvals", perm: ["core.approvalrequest.view"], icon: "check" },
-  { to: "/r/core.outboxmessage", label: "Notifications / outbox", perm: ["outbox.approve"], icon: "bell" },
+  { to: "/r/core.outboxmessage", label: "Messages to send", perm: ["outbox.approve"], icon: "bell" },
 ];
 const FLOW = ["crm", "sales", "planning", "production", "inventory", "purchase", "quality", "fg"];
 const SUPPORT = ["gate", "tasks", "masters", "core"];
 
 const BOARDS: NavItem[] = [
-  { to: "/dashboard", label: "Owner overview", perm: ["dashboard.owner.view"], icon: "dashboard" },
+  { to: "/dashboard", label: "Business overview", perm: ["dashboard.owner.view"], icon: "dashboard" },
   { to: "/machines", label: "Machine board", perm: ["dashboard.owner.view", "dashboard.department.view"], icon: "machine" },
   { to: "/planning-board", label: "Planning board", perm: ["planning.planline.view"], icon: "calendar" },
   { to: "/inventory", label: "Stock inventory", perm: ["inventory.stockbalance.view"], icon: "boxes" },
@@ -33,6 +33,20 @@ const BOARDS: NavItem[] = [
   { to: "/audit", label: "Audit log", perm: ["audit.view"], icon: "audit" },
   { to: "/tv", label: "TV view", perm: ["dashboard.tv.view"], icon: "tv" },
 ];
+
+export type Screen = { to: string; label: string; icon: IconName; group: string };
+
+/** Every screen the signed-in user may open, for the home page shortcuts. */
+export function useScreens(): Screen[] {
+  const { modules, can } = useAuth();
+  const allowed = (b: NavItem) => !b.perm.length || b.perm.some(can);
+  const fixed = [...PERSONAL.filter(allowed).map((b) => ({ ...b, group: "My work" })), ...BOARDS.filter(allowed).map((b) => ({ ...b, group: "Dashboards" }))];
+  const seen = new Set(fixed.map((b) => b.to));
+  const records = modules.filter((m) => m.key !== "dashboard").flatMap((m) => m.resources
+    .filter((r) => r.nav !== false && !seen.has(`/r/${r.key}`))
+    .map((r) => ({ to: `/r/${r.key}`, label: r.label, icon: MODULE_ICONS[m.key] ?? "database", group: m.label })));
+  return [...fixed, ...records];
+}
 
 export default function Layout() {
   const { profile, modules, can, logout } = useAuth();
@@ -113,10 +127,10 @@ export default function Layout() {
   return (
     <div className={`shell ${menu ? "menu-open" : ""}`}>
       <aside className="sidebar" onClick={(e) => (e.target as HTMLElement).closest("a") && setMenu(false)}>
-        <div className="side-brand"><KantamLogo className="side-logo" /><div className="tiny side-sub">ERP + CRM · Bareja plant</div></div>
+        <div className="side-brand"><KantamLogo className="side-logo" /><div className="tiny side-sub">Bareja Plant</div></div>
         <nav>
           <div className="nav-section">
-            <div className="nav-heading">Personal work</div>
+            <div className="nav-heading">My work</div>
             {personal.map((b) => (
               <NavLink key={b.to} to={b.to} end={b.to === "/"}>
                 <Icon name={b.icon} size={16} />{b.label}
@@ -126,12 +140,12 @@ export default function Layout() {
           </div>
           {boards.length > 0 && (
             <div className="nav-section">
-              <div className="nav-heading">Boards</div>
+              <div className="nav-heading">Dashboards</div>
               {boards.map((b) => <NavLink key={b.to} to={b.to}><Icon name={b.icon} size={16} />{b.label}</NavLink>)}
             </div>
           )}
-          {section("Factory flow", FLOW)}
-          {section("Role-scoped support", SUPPORT)}
+          {section("Factory", FLOW)}
+          {section("Admin & support", SUPPORT)}
         </nav>
       </aside>
       <div className="main">
@@ -157,7 +171,7 @@ export default function Layout() {
               </div>
             )}
           </div>
-          <button className="icon-btn" onClick={() => setThemeOpen(true)} aria-label="Theme and colours" title="Theme & colours"><Icon name="palette" size={20} /></button>
+          <button className="icon-btn" onClick={() => setThemeOpen(true)} aria-label="Display settings: text size and colours" title="Text size & colours"><Icon name="palette" size={20} /></button>
           <div className="who">
             <div className="who-name">{profile?.full_name}</div>
             <div className="tiny muted">{profile?.department ?? ""} · {profile?.roles.join(", ")}</div>

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { get } from "../api";
 import type { FieldMeta, ResourceMeta, Row } from "../types";
+import { RecordForm } from "./Forms";
 import Icon from "./Icon";
+import { Modal } from "./ui";
 
 const metaCache = new Map<string, Promise<ResourceMeta>>();
 export function resourceMeta(key: string) {
@@ -28,9 +30,10 @@ export function resolveDepends(depends: Record<string, string> | undefined, valu
   return out;
 }
 
-export function FkSelect({ target, value, label, onChange, filters, disabled, required }: {
+/** Searchable dropdown for a linked record, with the target's category filters and "+ Create new". */
+export function FkSelect({ target, value, label, onChange, filters, filterDefault, disabled, required, exclude }: {
   target: string; value: string | null; label?: string | null; onChange: (v: string | null, label?: string) => void;
-  filters?: Record<string, string>; disabled?: boolean; required?: boolean;
+  filters?: Record<string, string>; filterDefault?: Record<string, string>; disabled?: boolean; required?: boolean; exclude?: string[];
 }) {
   const [meta, setMeta] = useState<ResourceMeta | null>(null);
   const [q, setQ] = useState("");
@@ -38,8 +41,14 @@ export function FkSelect({ target, value, label, onChange, filters, disabled, re
   const [rows, setRows] = useState<Row[]>([]);
   const [shown, setShown] = useState(label ?? "");
   const [err, setErr] = useState("");
+  const [picked, setPicked] = useState<Record<string, string>>(filterDefault ?? {});
+  const [creating, setCreating] = useState(false);
   const timer = useRef<number>();
-  const filterKey = JSON.stringify(filters ?? {});
+  const fixed = filters ?? {};
+  const query = { ...picked, ...fixed };
+  const filterKey = JSON.stringify(query);
+  // Category-style filters of the target the user may change (fixed ones come from earlier selections).
+  const choices = (meta?.filters ?? []).filter((f) => f.type === "choice" && !(f.name in fixed)).slice(0, 2);
 
   useEffect(() => setShown(label ?? ""), [label]);
   useEffect(() => { resourceMeta(target).then(setMeta).catch(() => setErr("No access")); }, [target]);
@@ -47,12 +56,22 @@ export function FkSelect({ target, value, label, onChange, filters, disabled, re
     if (!open) return;
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      get<{ results: Row[] }>(`/api/r/${target}`, { search: q, page_size: 25, ...(filters ?? {}) })
+      get<{ results: Row[] }>(`/api/r/${target}`, { search: q, page_size: 25, ...query })
         .then((r) => { setRows(r.results); setErr(""); })
         .catch((e) => setErr(e.message));
     }, 200);
     return () => window.clearTimeout(timer.current);
   }, [q, open, target, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const choose = (r: Row) => {
+    const l = optionLabel(r, meta);
+    onChange(r.id, l);
+    setShown(exclude ? "" : l);
+    setOpen(false);
+  };
+  const formFields = new Set([...(meta?.form_fields ?? []), ...(meta?.create_only_fields ?? [])]);
+  const keep = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).filter(([k, v]) => v && formFields.has(k)));
+  const listed = rows.filter((r) => !exclude?.includes(r.id));
 
   return (
     <div className="fk" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setOpen(false)}>
@@ -64,23 +83,67 @@ export function FkSelect({ target, value, label, onChange, filters, disabled, re
         disabled={disabled}
         required={required && !value}
       />
-      {value && !disabled && <button type="button" className="fk-clear" onClick={() => { onChange(null); setShown(""); }} aria-label="Clear"><Icon name="close" size={16} /></button>}
+      {value && !disabled && !exclude && <button type="button" className="fk-clear" onClick={() => { onChange(null); setShown(""); }} aria-label="Clear"><Icon name="close" size={16} /></button>}
       {open && (
         <ul className="fk-menu">
+          {choices.length > 0 && (
+            <li className="fk-filters">
+              {choices.map((f) => (
+                <label key={f.name}>
+                  <span>{f.label}</span>
+                  <select value={picked[f.name] ?? ""} onChange={(e) => setPicked((p) => ({ ...p, [f.name]: e.target.value }))}>
+                    <option value="">All</option>
+                    {f.choices?.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </label>
+              ))}
+            </li>
+          )}
           {err && <li className="muted">{err}</li>}
-          {!err && rows.length === 0 && <li className="muted">No matching records{filters && Object.keys(filters).length ? " (filtered by earlier selections)" : ""}</li>}
-          {rows.map((r) => (
+          {!err && listed.length === 0 && <li className="muted">No matching records{Object.values(query).some(Boolean) ? " (filtered)" : ""}</li>}
+          {listed.map((r) => (
             <li key={r.id}>
-              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                const l = optionLabel(r, meta);
-                onChange(r.id, l);
-                setShown(l);
-                setOpen(false);
-              }}>{optionLabel(r, meta)}</button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => choose(r)}>{optionLabel(r, meta)}</button>
             </li>
           ))}
+          {meta?.can_create && (
+            <li className="fk-create">
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setOpen(false); setCreating(true); }}>
+                <Icon name="plus" size={14} />Create new {meta.singular.toLowerCase()}
+              </button>
+            </li>
+          )}
         </ul>
       )}
+      {creating && meta && (
+        <Modal title={`New ${meta.singular.toLowerCase()}`} onClose={() => setCreating(false)} wide>
+          <RecordForm meta={meta} defaults={keep(fixed)} initial={keep(picked)} onCancel={() => setCreating(false)}
+            onSaved={(r) => { setCreating(false); choose(r); }} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** Several linked records (e.g. the customers of an artwork): chips plus a dropdown to add more. */
+function FkMultiSelect({ target, value, items, onChange, filters, filterDefault, disabled }: {
+  target: string; value: string[]; items: { id: string; label: string }[]; onChange: (v: string[], items: { id: string; label: string }[]) => void;
+  filters?: Record<string, string>; filterDefault?: Record<string, string>; disabled?: boolean;
+}) {
+  const known = new Map(items.map((i) => [i.id, i.label]));
+  return (
+    <div className="fk-multi">
+      {value.length > 0 && (
+        <div className="chips">
+          {value.map((id) => (
+            <span key={id} className="chip">{known.get(id) ?? id}
+              {!disabled && <button type="button" aria-label="Remove" onClick={() => onChange(value.filter((x) => x !== id), items.filter((i) => i.id !== id))}><Icon name="close" size={12} /></button>}
+            </span>
+          ))}
+        </div>
+      )}
+      {!disabled && <FkSelect target={target} value={null} filters={filters} filterDefault={filterDefault} exclude={value}
+        onChange={(v, l) => v && onChange([...value, v], [...items, { id: v, label: l ?? v }])} />}
     </div>
   );
 }
@@ -119,16 +182,21 @@ function LookupSelect({ source, value, onChange, multiple }: { source: string; v
 
 export function FieldInput({ meta, value, onChange, values, parent, record, labelValue, onLabel }: {
   meta: FieldMeta; value: any; onChange: (v: any) => void; values: Record<string, any>; parent?: Row | null; record?: Row | null;
-  labelValue?: string | null; onLabel?: (l?: string) => void;
+  labelValue?: any; onLabel?: (l?: any) => void;
 }) {
   const filters = useMemo(() => ({ ...(meta.filter ?? {}), ...resolveDepends(meta.depends, values, parent) }), [meta, values, parent]);
   const disabled = meta.readonly;
   switch (meta.type) {
     case "fk":
       return meta.target ? (
-        <FkSelect target={meta.target} value={value ?? null} label={labelValue} filters={filters} disabled={disabled} required={meta.required}
-          onChange={(v, l) => { onChange(v); onLabel?.(l); }} />
+        <FkSelect target={meta.target} value={value ?? null} label={labelValue} filters={filters} filterDefault={meta.filter_default} disabled={disabled}
+          required={meta.required} onChange={(v, l) => { onChange(v); onLabel?.(l); }} />
       ) : <input value={value ?? ""} disabled />;
+    case "fk_multi":
+      return meta.target ? (
+        <FkMultiSelect target={meta.target} value={value ?? []} items={Array.isArray(labelValue) ? labelValue : []} filters={filters}
+          filterDefault={meta.filter_default} disabled={disabled} onChange={(v, items) => { onChange(v); onLabel?.(items); }} />
+      ) : null;
     case "boolean":
       return <label className="check"><input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} disabled={disabled} /> {meta.label}</label>;
     case "choice":

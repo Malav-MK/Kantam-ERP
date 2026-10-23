@@ -4,7 +4,7 @@ export type FieldMeta = {
   name: string;
   label: string;
   type: "text" | "textarea" | "email" | "integer" | "decimal" | "boolean" | "date" | "datetime" | "time" | "json" | "choice" | "fk" | "computed"
-    | "password" | "lookup" | "multiselect" | "checklist";
+    | "password" | "lookup" | "multiselect" | "checklist" | "fk_multi";
   readonly?: boolean;
   required?: boolean;
   choices?: Choice[];
@@ -14,6 +14,10 @@ export type FieldMeta = {
   filter?: Record<string, string>;
   source?: string;
   decimals?: number;
+  /** Dropdown filter preselected for this field; the user can change it. */
+  filter_default?: Record<string, string>;
+  /** Only shown (and then required) when another field has this value. */
+  show_if?: Record<string, string>;
 };
 
 export type ActionMeta = {
@@ -43,14 +47,13 @@ export type ResourceMeta = {
   can_create: boolean;
   can_update: boolean;
   can_export: boolean;
+  can_delete?: boolean;
   actions: ActionMeta[];
   inlines: { resource: string; fk: string; label: string }[];
   help: { why?: string; steps?: string; effect?: string; boundary?: string };
-  approval_rules: ApprovalRule[];
+  defaults?: Record<string, any>;
+  required_uploads?: { purpose: string; label: string; accept: string }[];
 };
-
-export type ApprovalRule = { operation: "create" | "update" | "action"; action: string; condition: string; fields: string[];
-  amount_threshold: string | null; approvals: number; name: string };
 
 export type ModuleMeta = { key: string; label: string; resources: ResourceMeta[] };
 
@@ -70,4 +73,4 @@ export type Profile = {
   device?: { id: string; name: string } | null;
 };
 
-export type Row = Record<string, any> & { id: string; _meta?: { editable: boolean; locked_reason: string | null; actions: string[]; pending_approvals?: string[] }; _extra?: any };
+export type Row = Record<string, any> & { id: string; _meta?: { editable: boolean; deletable?: boolean; locked_reason: string | null; actions: string[]; pending_approvals?: string[] }; _extra?: any };

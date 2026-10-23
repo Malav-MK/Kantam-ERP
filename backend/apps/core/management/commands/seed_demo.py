@@ -69,8 +69,8 @@ class Command(BaseCommand):
                                      delivery_address="Demo address, Gujarat", created_by=by)
         Customer.objects.create(code="DEMO-C2", name="Demo Sweets Co.", industry="Sweets", owner=managers["sales.exec"], created_by=by)
         Contact.objects.create(customer=c1, name="Demo Buyer", phone="+910000000000", whatsapp_opt_in=True, created_by=by)
-        s_poly = Supplier.objects.create(code="DEMO-S1", name="Demo Polymers", category="Polymer", lead_time_days=5, created_by=by)
-        s_lbl = Supplier.objects.create(code="DEMO-S2", name="Demo Label Printers", category="Labels", lead_time_days=10, created_by=by)
+        s_poly = Supplier.objects.create(code="DEMO-S1", name="Demo Polymers", category="polymer", lead_time_days=5, created_by=by)
+        s_lbl = Supplier.objects.create(code="DEMO-S2", name="Demo Label Printers", category="labels", lead_time_days=10, created_by=by)
         Contact.objects.create(supplier=s_poly, name="Polymer desk", phone="+910000000001", whatsapp_opt_in=True, created_by=by)
 
         def item(code, name, kind, uom, whole=False, **kw):
@@ -106,9 +106,10 @@ class Command(BaseCommand):
                 lab = item(f"LBL-R500-{flavour[:3].upper()}-{ctype[:3].upper()}", f"IML label R500 {flavour} {ctype}", "label", "pcs", True,
                            group="R500 dairy", default_supplier=s_lbl)
                 art = Artwork.objects.create(code=f"MK-ART-R500-{flavour[:3].upper()}-{ctype[:1].upper()}", product=prod, component_type=ctype,
-                                             customer=c1, flavour=flavour, label_item=lab, kld_reference="KLD-DEMO", status="approved",
+                                             flavour=flavour, label_item=lab, kld_reference="KLD-DEMO", status="approved", finish="glossy",
                                              customer_approval_ref="Demo approval mail", customer_approved_on=today, released_at=timezone.now(),
                                              supplier=s_lbl, created_by=by)
+                art.customers.add(c1)
                 post_opening_balance(item=lab, qty=40000, location=lbl_loc, user=by, artwork=art, supplier_lot=f"DEMO-{flavour[:3].upper()}")
         post_opening_balance(item=pp, qty=3000, location=rm, user=by, supplier_lot="PP-DEMO-1")
         post_opening_balance(item=mb_white, qty=150, location=rm, user=by, supplier_lot="MBW-DEMO-1")

@@ -67,7 +67,14 @@ export async function api<T = any>(method: string, url: string, body?: unknown, 
     return r as unknown as T;
   }
   const text = await r.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    // An HTML error page instead of JSON (server error or the server is restarting).
+    throw new ApiError(r.status, { error: "server_error", message: r.ok ? "The server sent an unexpected reply. Reload the page and try again."
+      : `The server could not complete this (error ${r.status}). Try again; if it keeps happening, tell your administrator what you were doing.` });
+  }
   if (!r.ok) throw new ApiError(r.status, data);
   return data as T;
 }

@@ -102,11 +102,15 @@ class StockMoveResource(Resource):
     ordering = ["-event_time"]
     help = {
         "why": "One line per material / lot / location transaction - a summary row never hides repeated issues or lots.",
-        "boundary": "Posted movements are reversed with a link, never edited or deleted. Negative stock is blocked.",
+        "boundary": "Posted movements are reversed with a link, never edited. Only the owner can delete a wrong entry, and its "
+                    "quantity is taken back off the stock first. Negative stock is blocked.",
     }
 
     def _reverse(request, obj, data):
         return services.reverse_move(obj, request.user, data["reason"])
+
+    def before_delete(self, request, obj):
+        services.undo_move(obj)
 
     actions = [
         Action("issue", "Issue to shift PR", _issue, permission="inventory.issue.create", detail=False, tone="primary", fields=ISSUE_FIELDS),
@@ -149,6 +153,10 @@ class LotResource(Resource):
     search_fields = ["doc_no", "supplier_lot", "item__code"]
     help = {"why": "Lots carry quality state and genealogy so a complaint traces back to machine, shift, polymer and label lots."}
 
+    def before_delete(self, request, obj):
+        # Empty balance rows are bookkeeping only; stock still on hand keeps blocking the delete.
+        StockBalance.objects.filter(lot=obj, qty=0).delete()
+
     def extra_detail(self, request, obj):
         from .trace import trace_lot
         bals = StockBalance.objects.filter(lot=obj, qty__gt=0).values("location__code", "location__kind", "qty")
@@ -165,6 +173,7 @@ class StockBalanceResource(Resource):
     title_field = "item"
     allow_create = False
     allow_update = False
+    allow_delete = False  # derived from the ledger: delete the movement instead
     list_fields = ["item", "lot", "location", "qty", "lot_state", "lot_artwork", "updated_at"]
     filter_fields = ["item", "location", "lot"]
     search_fields = ["item__code", "item__name", "lot__doc_no", "location__code"]

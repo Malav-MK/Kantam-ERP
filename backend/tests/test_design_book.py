@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from apps.core.models import ApprovalRequest, OutboxMessage
+from apps.core.models import OutboxMessage
 from apps.core.services import draft_outbox, record_delivery_status
 from apps.crm.models import Lead
 from apps.purchase.models import GRN, POLine, PurchaseOrder
@@ -19,7 +19,7 @@ class FollowUpDueDateTests(PlantTestCase):
         t = mm.post("/api/r/tasks.task", {"title": "Confirm label delivery", "assignee": str(self.tech.pk), "due_at": due.isoformat()}).json()
         return mm, t, due
 
-    def test_original_due_kept_and_revision_needs_reason_and_checker(self):
+    def test_original_due_kept_and_revision_needs_reason(self):
         mm, t, due = self._task()
         task = Task.objects.get(pk=t["id"])
         self.assertEqual(task.original_due_at, task.due_at)
@@ -30,17 +30,12 @@ class FollowUpDueDateTests(PlantTestCase):
         new_due = (due + timedelta(days=1)).isoformat()
         no_reason = mm.post(f"/api/r/tasks.task/{t['id']}/actions/revise_due", {"due_at": new_due})
         self.assertEqual(no_reason.json()["error"], "reason_required")
-        held = mm.post(f"/api/r/tasks.task/{t['id']}/actions/revise_due", {"due_at": new_due, "reason": "Supplier moved dispatch to Friday"})
-        self.assertEqual(held.status_code, 202, held.content)  # maker-checker
-        task.refresh_from_db()
-        self.assertEqual(task.due_at, task.original_due_at)
-        approved = self.client_for(self.owner).post(f"/api/r/core.approvalrequest/{held.json()['approval']}/actions/approve")
-        self.assertEqual(approved.status_code, 200, approved.content)
+        revised = mm.post(f"/api/r/tasks.task/{t['id']}/actions/revise_due", {"due_at": new_due, "reason": "Supplier moved dispatch to Friday"})
+        self.assertEqual(revised.status_code, 200, revised.content)  # applies directly
         task.refresh_from_db()
         self.assertEqual(task.original_due_at, due.replace(microsecond=task.original_due_at.microsecond))
         self.assertNotEqual(task.due_at, task.original_due_at)
         self.assertEqual(task.due_revisions[0]["reason"], "Supplier moved dispatch to Friday")
-        self.assertEqual(ApprovalRequest.objects.get(pk=held.json()["approval"]).status, "approved")
 
     def test_lateness_measured_against_original_due(self):
         _, t, _ = self._task()

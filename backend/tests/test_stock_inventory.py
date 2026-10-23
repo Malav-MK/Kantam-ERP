@@ -25,15 +25,12 @@ class StockInventoryTests(PlantTestCase):
         self.assertEqual(data["totals"]["low"], 1)
         self.assertIsNotNone(data["totals"]["value"])
 
-    def test_store_manager_opening_stock_waits_for_approval(self):
+    def test_store_manager_posts_opening_stock_directly(self):
         mgr = self.client_for(self.store_mgr)
         r = mgr.post("/api/r/inventory.stockbalance/actions/opening_stock",
                      {"item": str(self.mb.pk), "location": str(self.loc("RM").pk), "qty": "20", "reason": "Physical stock at go-live"})
-        self.assertEqual(r.status_code, 202, r.content)
-        self.assertFalse(StockBalance.objects.filter(item=self.mb).exists())
-        ok = self.client_for(self.owner).post(f"/api/r/core.approvalrequest/{r.json()['approval']}/actions/approve")
-        self.assertEqual(ok.status_code, 200, ok.content)
-        self.assertEqual(ApprovalRequest.objects.get(pk=r.json()["approval"]).status, "approved")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertFalse(ApprovalRequest.objects.exists())
         self.assertEqual(StockBalance.objects.get(item=self.mb).qty, Decimal("20"))
         # Store managers see quantities but not valuation.
         self.assertIsNone(mgr.get("/api/dash/inventory").json()["totals"]["value"])

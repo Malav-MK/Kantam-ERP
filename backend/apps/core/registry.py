@@ -73,12 +73,23 @@ class Resource:
     inlines = []
     allow_create = True
     allow_update = True
+    # Owner / admin permanent delete. Child lines (inlines that are not in the menu) go with their parent;
+    # anything else still pointing at the record blocks the delete.
+    allow_delete = True
     # Writable fields the server fills in before_create when omitted.
     server_defaults = []
     # Optional at model level (old rows) but required for new entries; enforced in hooks, flagged in the form.
     required_fields = []
     # False for child records reached through their parent's tabs (book UI-11: keep them out of the sidebar).
     in_nav = True
+    # Lines that belong to one parent and are deleted with it (defaults to "not in the menu").
+    deleted_with_parent = None
+    # Dropdown filter preselected for a field, which the user may change, e.g. {"supplier": {"category": "labels"}}.
+    filter_defaults = {}
+    # Show a form field only when another field has a value, e.g. {"finish_other": {"finish": "other"}}.
+    show_if = {}
+    # Files the create form must include, e.g. [{"purpose": "design_pdf", "label": "Designed PDF", "accept": "application/pdf"}].
+    required_uploads = []
     help = {}
     status_field = "status"
 
@@ -117,6 +128,21 @@ class Resource:
 
     def after_update(self, request, obj, changes):
         pass
+
+    def form_defaults(self, user):
+        """Values filled into a new record's form, e.g. the next free code."""
+        return {}
+
+    def delete_block_reason(self, request, obj):
+        """Return a message if the owner must not delete this record, else None."""
+        return None
+
+    def before_delete(self, request, obj):
+        """Clean-up that must happen before the row goes (e.g. take a movement off the balances)."""
+        pass
+
+    def destroy(self, request, obj):
+        obj.delete()
 
     def extra_detail(self, request, obj):
         return {}

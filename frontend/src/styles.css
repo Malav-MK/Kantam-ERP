@@ -327,7 +327,7 @@ table.diff td.new { font-weight: 650; background: var(--ok-bg); }
 
 /* Sidebar sections (design book p.04): one expanded department at a time. */
 .nav-section { margin-bottom: 16px; }
-.nav-heading { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--side-muted); padding: 4px 10px 6px; }
+.nav-heading { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--side-muted); padding: 4px 10px 6px; }
 .nav-section .nav-group { margin-bottom: 2px; }
 .nav-toggle { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; font-size: 13px; text-transform: none;
   letter-spacing: 0; color: var(--side-text); padding: 7px 10px; border-radius: 7px; }
@@ -360,3 +360,39 @@ table.diff td.new { font-weight: 650; background: var(--ok-bg); }
 .perm-special legend { font-weight: 600; padding: 0 4px; }
 .perm-special .check { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; cursor: pointer; }
 .perm-special .check input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--brand); }
+
+/* Text size (Display settings). Scales the whole workspace; the sidebar height is divided back so it still fits the window. */
+:root { --zoom: 1; }
+:root[data-text="large"] { --zoom: 1.12; }
+:root[data-text="xlarge"] { --zoom: 1.25; }
+.shell { zoom: var(--zoom); }
+.sidebar { height: calc(100vh / var(--zoom)); }
+
+/* Scrollbars: the sidebar uses the same scrollbar design as the main screen, in its own colours. */
+html { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) var(--bg); }
+.sidebar { scrollbar-color: color-mix(in srgb, var(--side-muted) 45%, transparent) var(--side); }
+
+/* Home: every screen the user can open */
+.goto { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.goto-card { display: flex; flex-direction: column; gap: 2px; }
+.goto-card h4 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.goto-card a { padding: 6px 8px; margin: 0 -8px; border-radius: 6px; }
+.goto-card a:hover { background: var(--surface-2); text-decoration: none; }
+
+/* Owner delete */
+.row-tools { width: 44px; text-align: right; }
+.icon-btn.danger:hover { color: var(--danger); background: var(--danger-bg); }
+.empty .btn { margin-top: 12px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+
+/* Dropdowns: category filters, "+ Create new", several selections as chips */
+.fk-menu li.fk-filters { display: flex; gap: 8px; padding: 4px 4px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; position: sticky; top: -4px; background: var(--surface); }
+.fk-filters label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); flex: 1; }
+.fk-filters select { min-height: 32px; padding: 4px 6px; }
+.fk-menu li.fk-create { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; position: sticky; bottom: -4px; background: var(--surface); }
+.fk-menu li.fk-create button { display: flex; align-items: center; gap: 6px; color: var(--brand); font-weight: 600; }
+.fk-multi { display: flex; flex-direction: column; gap: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--brand-soft); color: var(--text); font-size: 13px; }
+.chip button { display: inline-flex; border: 0; background: none; cursor: pointer; color: var(--muted); padding: 2px; border-radius: 999px; }
+.chip button:hover { color: var(--danger); }

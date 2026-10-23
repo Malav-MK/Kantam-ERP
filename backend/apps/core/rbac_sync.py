@@ -9,6 +9,4 @@ def sync_permissions():
         Permission.objects.update_or_create(code=code, defaults={"module": module, "description": desc[:200]})
     Permission.objects.exclude(code__in=list(codes)).delete()
     sync_roles_from_matrix()
-    from .maker_checker import seed_default_policies
-    seed_default_policies()
     return len(codes)

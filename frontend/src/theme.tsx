@@ -9,6 +9,7 @@ export type ThemePrefs = {
   accent?: string;
   sidebar?: "dark" | "light" | "brand" | "navy";
   density?: "comfortable" | "compact";
+  text?: "normal" | "large" | "xlarge";
 };
 
 // Kantam red and neutral grey come from the official logo (#E31F26 / #888888).
@@ -22,7 +23,7 @@ export const PRESETS: Record<Exclude<ThemePrefs["preset"], undefined>, { label: 
   custom: { label: "Custom", accent: "#e31f26" },
 };
 
-export const DEFAULT_THEME: Required<ThemePrefs> = { mode: "system", preset: "kantam", accent: PRESETS.kantam.accent, sidebar: "dark", density: "comfortable" };
+export const DEFAULT_THEME: Required<ThemePrefs> = { mode: "system", preset: "kantam", accent: PRESETS.kantam.accent, sidebar: "dark", density: "comfortable", text: "normal" };
 const CACHE_KEY = "kantam.theme";
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -45,6 +46,7 @@ export function applyTheme(p?: ThemePrefs | null) {
   root.dataset.preset = t.preset;
   root.dataset.sidebar = t.sidebar;
   root.dataset.density = t.density;
+  root.dataset.text = t.text;
   root.style.setProperty("--brand", t.accent);
   root.style.setProperty("--brand-ink", inkFor(t.accent));
   try {
@@ -105,7 +107,7 @@ export function ThemeSettings({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal title="Theme & colours" onClose={onClose}>
+    <Modal title="Display settings" onClose={onClose}>
       <div className="stack">
         <div>
           <div className="setting-label">Appearance</div>
@@ -142,6 +144,15 @@ export function ThemeSettings({ onClose }: { onClose: () => void }) {
               <button key={s} className={t.sidebar === s ? "on" : ""} onClick={() => update({ sidebar: s })}>
                 {s === "brand" ? "Accent" : s[0].toUpperCase() + s.slice(1)}
               </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="setting-label">Text size</div>
+          <div className="seg">
+            {([["normal", "Normal"], ["large", "Large"], ["xlarge", "Extra large"]] as const).map(([k, l]) => (
+              <button key={k} className={t.text === k ? "on" : ""} onClick={() => update({ text: k })}>{l}</button>
             ))}
           </div>
         </div>

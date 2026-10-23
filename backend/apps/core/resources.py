@@ -8,7 +8,7 @@ from django.utils import timezone
 from . import audit
 from .api import BusinessRuleError
 from .auth_views import new_enrollment_code
-from .models import ApprovalPolicy, ApprovalRequest, AuthSession, Department, Device, OutboxMessage, Role, Site, User, UserRole
+from .models import ApprovalRequest, AuthSession, Department, Device, OutboxMessage, Role, Site, User, UserRole
 from .rbac import effective_permissions, has_perm, is_owner
 from .registry import Action, Resource, register
 
@@ -24,6 +24,14 @@ def _protected_target(request, target):
 def _guard_target(request, target):
     if _protected_target(request, target):
         raise BusinessRuleError("Owner accounts can only be changed by an owner.", "protected_account")
+
+
+def _user_delete_block(request, obj):
+    if obj.pk == request.user.pk:
+        return "You cannot delete your own account."
+    if obj.role_grants.filter(role__level="owner").exists():
+        return "Owner accounts cannot be deleted. Revoke the owner role first."
+    return None
 
 
 @register
@@ -45,6 +53,9 @@ class UserLookupResource(Resource):
 
     def scope(self, request, qs):
         return qs.filter(is_active=True)
+
+    def delete_block_reason(self, request, obj):
+        return _user_delete_block(request, obj)
 
 
 @register
@@ -73,6 +84,9 @@ class UserAdminResource(Resource):
     def edit_block_reason(self, request, obj):
         if _protected_target(request, obj):
             return "Owner accounts can only be changed by an owner."
+
+    def delete_block_reason(self, request, obj):
+        return _user_delete_block(request, obj)
         return None
 
     def create(self, request, data):
@@ -264,7 +278,7 @@ class RoleResource(Resource):
     ordering = ["level", "name"]
     help = {
         "steps": "Open a role and tick View / Add / Edit / Delete / Approve / Export for each module or record type, then save with a reason.",
-        "boundary": "The owner role always has full access and cannot be changed or deleted. Only the owner can delete roles, "
+        "boundary": "The owner role always has full access and cannot be changed or deleted. The owner or an administrator can delete other roles, "
                     "and only once no user holds them. You cannot grant permissions you do not hold yourself.",
     }
 
@@ -286,6 +300,27 @@ class RoleResource(Resource):
         if obj.code == "owner":
             return "The owner role always has full access; it cannot be edited."
         return None
+
+    def delete_block_reason(self, request, obj):
+        if obj.code == "owner" or obj.level == "owner":
+            return "The owner role cannot be deleted."
+        return None
+
+    def before_delete(self, request, obj):
+        holders = list(User.objects.filter(role_grants__role=obj).distinct().order_by("full_name").values_list("full_name", flat=True))
+        if holders:
+            names = ", ".join(holders[:10]) + (f" and {len(holders) - 10} more" if len(holders) > 10 else "")
+            raise BusinessRuleError(f"{len(holders)} user(s) still have this role: {names}. Revoke it from them first (Users → Revoke role).",
+                                    "role_in_use", {"users": holders})
+
+    def destroy(self, request, obj):
+        if obj.is_system:
+            # Kept as a hidden row so upgrades do not recreate it.
+            obj.permissions.clear()
+            obj.deleted_at = timezone.now()
+            obj.save(update_fields=["deleted_at"])
+        else:
+            obj.delete()
 
     def extra_detail(self, request, obj):
         from .rbac import BASELINE_PERMISSIONS
@@ -339,32 +374,7 @@ class RoleResource(Resource):
                      changes={"added": sorted(codes - before), "removed": sorted(before - codes)}, reason=data.get("reason", ""))
         return obj
 
-    def _delete_role(request, obj, data):
-        if not is_owner(request.user):
-            raise BusinessRuleError("Only the owner can delete roles.", "not_authorised")
-        if obj.code == "owner" or obj.level == "owner":
-            raise BusinessRuleError("The owner role cannot be deleted.", "invalid_state")
-        holders = list(User.objects.filter(role_grants__role=obj).distinct().order_by("full_name").values_list("full_name", flat=True))
-        if holders:
-            names = ", ".join(holders[:10]) + (f" and {len(holders) - 10} more" if len(holders) > 10 else "")
-            raise BusinessRuleError(f"{len(holders)} user(s) still have this role: {names}. Revoke it from them first (Users → Revoke role).",
-                                    "role_in_use", {"users": holders})
-        label = f"{obj.name} ({obj.code})"
-        audit.record("role_deleted", "core.role", obj, changes={"permissions": sorted(obj.permissions.values_list("code", flat=True)),
-                                                               "built_in": obj.is_system}, reason=data.get("reason", ""))
-        if obj.is_system:
-            # Kept as a hidden row so upgrades do not recreate it.
-            obj.permissions.clear()
-            obj.deleted_at = timezone.now()
-            obj.save(update_fields=["deleted_at"])
-        else:
-            obj.delete()
-        return {"ok": True, "message": f"Role {label} deleted."}
-
     actions = [
-        Action("delete_role", "Delete role", _delete_role, permission="security.roles.manage", reason_required=True, tone="danger",
-               confirm="Delete this role? This cannot be undone from the screen.",
-               available=lambda o, r: o.code != "owner" and o.level != "owner" and is_owner(r.user)),
         Action("set_permissions", "Save permissions", _set_permissions, permission="security.roles.manage", reason_required=True,
                available=lambda o, r: o.code != "owner",
                fields=[{"name": "permissions", "label": "Permission codes", "type": "multiselect", "source": "permissions"}]),
@@ -537,63 +547,6 @@ class ApprovalResource(Resource):
         Action("withdraw", "Withdraw my request", _withdraw, permission="core.approvalrequest.view", reason_required=True,
                available=lambda o, r: o.status == "pending" and o.created_by_id == r.user.pk),
     ]
-
-
-@register
-class ApprovalPolicyResource(Resource):
-    key = "core.approvalpolicy"
-    model = ApprovalPolicy
-    label = "Maker / checker policies"
-    singular = "Approval policy"
-    module = "core"
-    title_field = "name"
-    ordering = ["resource", "operation", "action"]
-    permission_map = {"view": "approvals.policy.manage", "create": "approvals.policy.manage", "update": "approvals.policy.manage",
-                      "export": "approvals.policy.manage"}
-    list_fields = ["name", "resource", "operation", "action", "condition", "amount_threshold", "checker_permission", "required_approvals", "active"]
-    form_fields = ["name", "resource", "operation", "action", "condition", "fields", "amount_threshold", "checker_permission",
-                   "required_approvals", "reason_required", "expires_hours", "active", "description"]
-    filter_fields = ["resource", "operation", "active"]
-    search_fields = ["name", "resource", "action"]
-    field_help = {
-        "resource": "Resource key, e.g. purchase.purchaseorder (see the address bar of a workspace: /r/<key>).",
-        "checker_permission": "Permission the checker must hold, e.g. purchase.po.approve. The maker can never approve their own request.",
-        "fields": 'Only for "fields_changed": JSON list such as ["credit_limit", "payment_terms"].',
-    }
-    help = {"boundary": "Policy changes are themselves maker/checker controlled, so one person cannot silently switch a control off."}
-
-    def _validate(self, data, obj=None):
-        from .models import Permission
-        from .registry import REGISTRY
-        get = lambda k: data.get(k, getattr(obj, k, None) if obj else None)  # noqa: E731
-        res = REGISTRY.get(get("resource"))
-        if res is None:
-            raise BusinessRuleError("Unknown resource key.", "validation")
-        op = get("operation")
-        if op == "action":
-            if not res.get_action(get("action") or ""):
-                raise BusinessRuleError(f"{res.key} has no action '{get('action')}'. Available: {', '.join(a.name for a in res.actions)}", "validation")
-        elif get("action"):
-            raise BusinessRuleError("Action name is only used when operation is 'action'.", "validation")
-        if not Permission.objects.filter(code=get("checker_permission")).exists():
-            raise BusinessRuleError("Unknown checker permission code.", "validation")
-        n = get("required_approvals") or 1
-        if not 1 <= int(n) <= 3:
-            raise BusinessRuleError("Required approvals must be 1, 2 or 3.", "validation")
-        cond = get("condition")
-        if cond == "fields_changed":
-            fields = get("fields") or []
-            names = {f.name for f in res.model._meta.concrete_fields}
-            if not isinstance(fields, list) or not fields or any(f not in names for f in fields):
-                raise BusinessRuleError("List valid field names of the resource for 'fields_changed'.", "validation")
-        if cond == "amount_over" and get("amount_threshold") is None:
-            raise BusinessRuleError("Set the amount threshold.", "validation")
-
-    def before_create(self, request, data):
-        self._validate(data)
-
-    def before_update(self, request, obj, data):
-        self._validate(data, obj)
 
 
 @register
