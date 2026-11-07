@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.masters.models import COMPONENT_TYPES
 from apps.core import audit
 from apps.core.rbac import is_owner
 from apps.core.api import BusinessRuleError
@@ -15,6 +16,18 @@ from .models import Complaint, Inspection
 
 @register
 class InspectionResource(Resource):
+    json_editors = {
+        "results": {"add_label": "Add result", "columns": [
+            {"name": "parameter", "label": "Parameter", "placeholder": "e.g. Top diameter"},
+            {"name": "component", "label": "Component", "choices": [{"value": v, "label": str(l)} for v, l in COMPONENT_TYPES]},
+            {"name": "spec", "label": "Specification", "placeholder": "e.g. 95 +/- 0.3"},
+            {"name": "actual", "label": "Actual", "placeholder": "e.g. 95.1"},
+            {"name": "unit", "label": "Unit", "placeholder": "e.g. mm"},
+            {"name": "pass", "label": "Result", "type": "pass_fail"},
+            {"name": "critical", "label": "Critical", "type": "boolean"},
+        ]},
+        "checklist": {"key_label": "Check point", "key_placeholder": "e.g. Colour matches master", "add_label": "Add check"},
+    }
     key = "quality.inspection"
     model = Inspection
     label = "Inspections"

@@ -317,7 +317,7 @@ def release_pr(pr, user):
         pr.readiness = audit._jsonable({**ready, "shortages": shortages})
         pr.save(update_fields=["readiness"])
         if shortages:
-            notify_perm("purchase.requisition.create", f"Shortage blocks {pr.doc_no}", body=str(shortages), severity="critical",
+            notify_perm("purchase.requisition.create", f"Shortage blocks {pr.doc_no}", body=audit.readable(shortages), severity="critical",
                         resource="planning.productionrequest", object_id=pr.pk, next_action="Raise requisition / expedite supplier",
                         dedupe_key=f"pr-shortage:{pr.pk}")
         raise BusinessRuleError("PR cannot be released: " + "; ".join(ready["blockers"]), "release_blocked", {"blockers": ready["blockers"], "shortages": shortages})
@@ -365,7 +365,7 @@ def cancel_pr(pr, reason, user, reissue=False):
     machine_side = [{"item": m.item.code, "balance": str(m.machine_side_balance)} for m in pr.materials.all() if m.machine_side_balance > 0]
     audit.record("pr_cancelled", "planning.productionrequest", pr, changes={"machine_side_balance": machine_side}, reason=reason)
     if machine_side:
-        notify_perm("inventory.return.create", f"Return material against cancelled {pr.doc_no}", body=str(machine_side), severity="warning",
+        notify_perm("inventory.return.create", f"Return material against cancelled {pr.doc_no}", body=audit.readable(machine_side), severity="warning",
                     resource="planning.productionrequest", object_id=pr.pk, next_action="Post return against the old PR",
                     dedupe_key=f"pr-cancel-return:{pr.pk}")
     new_pr = None

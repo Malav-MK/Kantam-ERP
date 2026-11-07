@@ -1,6 +1,8 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { api, ApiError, newIdempotencyKey } from "../api";
 import type { ActionMeta, FieldMeta, ResourceMeta, Row } from "../types";
+import { textOf } from "../format";
+import DataView from "./DataView";
 import { FieldInput } from "./Field";
 import { ErrorBox, FieldLabel, Modal } from "./ui";
 
@@ -8,7 +10,7 @@ function errorText(e: unknown) {
   if (!(e instanceof ApiError)) return String(e);
   const d = e.details;
   if (d && typeof d === "object" && Object.keys(d).length && !("blockers" in d) && !("missing" in d)) {
-    const parts = Object.entries(d).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : v}`);
+    const parts = Object.entries(d).map(([k, v]) => `${k}: ${textOf(v)}`);
     return `${e.message}${parts.length ? " - " + parts.join("; ") : ""}`;
   }
   return e.message;
@@ -93,9 +95,9 @@ export function RecordForm({ meta, record, defaults, initial, parent, onSaved, o
     <form onSubmit={submit} className="form-grid">
       {names.filter((n) => !hidden.has(n) && visible(n)).map((n) => {
         const f: FieldMeta = meta.fields[n] ?? { name: n, label: n, type: "text" };
-        // Several tick boxes need a plain wrapper: an outer <label> would also toggle the first of them.
+        // Several inputs need a plain wrapper: an outer <label> would also activate the first of them.
         const multi = creating && f.multi_on_create;
-        const Wrap = multi ? "div" : "label";
+        const Wrap = multi || f.type === "json" ? "div" : "label";
         const input = (
           <FieldInput meta={multi ? { ...f, type: "choice_multi" } : f} value={values[n]} values={values} parent={parent} labelValue={labels[n]}
             onLabel={(l) => setLabels((s) => ({ ...s, [n]: l }))}
@@ -175,7 +177,7 @@ export function ActionDialog({ meta, action, record, onDone, onClose }: {
           ) : (
             <>
               {result.message && <div className="alert ok">{result.message}</div>}
-              <pre className="result">{JSON.stringify(result, null, 2)}</pre>
+              <DataView value={Object.fromEntries(Object.entries(result).filter(([k]) => k !== "message"))} />
             </>
           )}
           <div className="form-actions"><button className="btn primary" onClick={() => onDone(result)}>Done</button></div>

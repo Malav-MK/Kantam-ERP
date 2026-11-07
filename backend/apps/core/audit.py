@@ -49,6 +49,15 @@ def _jsonable(value):
     return value
 
 
+def readable(value):
+    """Structured data as a sentence for notification text, never a raw dictionary."""
+    if isinstance(value, dict):
+        return "; ".join(f"{k.replace('_', ' ')}: {readable(v)}" for k, v in value.items() if v not in (None, "", [], {}))
+    if isinstance(value, (list, tuple, set)):
+        return " | ".join(readable(v) for v in value)
+    return str(_jsonable(value))
+
+
 def snapshot(instance, fields=None):
     """Serialise concrete field values of a model instance."""
     data = {}

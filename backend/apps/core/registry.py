@@ -90,6 +90,8 @@ class Resource:
     show_if = {}
     # Create-only: send a list here and one record is saved per value, all or none, e.g. ["component_type"].
     multi_create_fields = []
+    # How a JSON column is entered in forms: {"columns": [...]} for rows, or {"fixed": [...]} for tick boxes and named checks.
+    json_editors = {}
     # Files the create form must include, e.g. [{"purpose": "design_pdf", "label": "Designed PDF", "accept": "application/pdf"}].
     required_uploads = []
     help = {}

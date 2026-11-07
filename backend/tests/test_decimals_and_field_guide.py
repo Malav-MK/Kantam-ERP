@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 
-from apps.core import calc
+from apps.core import audit, calc
 from apps.core.field_guide import GUIDE, field_guide
 from apps.core.fields import QtyField, parse_qty
 from apps.core.api import BusinessRuleError
@@ -288,3 +288,46 @@ class FractionalWorkflowTests(PlantTestCase):
         quote.refresh_from_db()
         self.assertEqual(quote.snapshot["lines"][0]["qty"], "1000.5")
         self.assertEqual(quote.snapshot["header"]["delivery_lead_days"], "10.5")
+
+
+class StructuredEntryTests(PlantTestCase):
+    """JSON columns are entered as rows and read as tables; no help text or message shows raw JSON."""
+
+    def test_every_writable_json_column_has_an_editor(self):
+        missing = []
+        for key, res in REGISTRY.items():
+            for name in dict.fromkeys(list(res.create_only_fields) + list(res.form_fields)):
+                try:
+                    f = res.model._meta.get_field(name)
+                except Exception:
+                    continue
+                if isinstance(f, models.JSONField) and name not in res.json_editors:
+                    missing.append(f"{key}.{name}")
+        self.assertEqual(missing, [])
+
+    def test_no_input_help_shows_json_syntax(self):
+        owner = self.client_for(self.owner)
+        bad = []
+        for key in REGISTRY:
+            r = owner.get(f"/api/r/{key}/meta")
+            if r.status_code != 200:
+                continue
+            meta = r.json()
+            helps = [f.get("help", "") for f in meta["fields"].values() if not f.get("readonly")] + [f.get("help", "") for a in meta["actions"] for f in a["fields"]]
+            bad += [f"{key}: {h[:50]}" for h in helps if '[{' in h or '{"' in h]
+        self.assertEqual(bad, [])
+
+    def test_editor_is_sent_and_rows_round_trip(self):
+        owner = self.client_for(self.owner)
+        meta = owner.get("/api/r/tasks.pmplan/meta").json()
+        self.assertEqual([c["name"] for c in meta["fields"]["checklist"]["editor"]["columns"]], ["text", "critical"])
+        self.assertEqual(owner.get("/api/r/fg.dispatch/meta").json()["fields"]["loading_checks"]["editor"]["fixed"][0]["key"], "monsoon_season")
+
+    def test_readable_text_has_no_dictionary_syntax(self):
+        text = audit.readable({"active_prs": ["PR-1", "PR-2"], "produced_good": Decimal("10.5"), "empty": [], "note": "Check"})
+        self.assertEqual(text, "active prs: PR-1 | PR-2; produced good: 10.5; note: Check")
+
+    def test_balance_summary_names_the_item_first(self):
+        r = self.client_for(self.owner).post("/api/r/inventory.stockbalance/actions/summary", {"item": str(self.pp.pk)})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(list(r.json())[:2], ["item", "uom"])

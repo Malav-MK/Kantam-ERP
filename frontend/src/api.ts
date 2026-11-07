@@ -1,3 +1,4 @@
+import { textOf } from "./format";
 // API client. The access token lives only in memory (never localStorage); the
 // refresh token and device credential are httpOnly cookies the page cannot read.
 export class ApiError extends Error {
@@ -6,7 +7,7 @@ export class ApiError extends Error {
   details: Record<string, unknown>;
   constructor(status: number, body: any) {
     const msg = typeof body?.message === "string" ? body.message : body?.reason || body?.error || `Request failed (${status})`;
-    super(typeof msg === "string" ? msg : JSON.stringify(msg));
+    super(typeof msg === "string" ? msg : textOf(msg));
     this.status = status;
     this.code = body?.error || body?.reason || "error";
     this.details = body?.details || (typeof body?.message === "object" ? body.message : {});

@@ -269,7 +269,7 @@ def _apply_count(approval, approver):
 def _current_stock_summary(request, obj, data):
     item = _get(Item, data.get("item"), "item", request)
     s = services.balance_summary(item)
-    return {k: str(v) for k, v in s.items()} | {"item": item.code, "uom": item.stock_uom}
+    return {"item": item.code, "uom": item.stock_uom} | {k: str(v) for k, v in s.items()}
 
 
 def _opening_stock(request, obj, data):

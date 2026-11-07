@@ -19,8 +19,16 @@ def _t(action):
     return lambda request, obj, data: services.transition(obj, request.user, action, data)
 
 
+CHECKLIST_EDITOR = {"auto_id": True, "add_label": "Add check point", "columns": [
+    {"name": "text", "label": "Point to check", "placeholder": "e.g. Oil level within marks"},
+    {"name": "critical", "label": "Critical", "type": "boolean"},
+]}
+
+
 @register
 class TaskResource(Resource):
+    json_editors = {"checklist": CHECKLIST_EDITOR}
+    field_help = {"checklist": "Frozen when the task is created, so later template changes never alter past sign-offs."}
     key = "tasks.task"
     model = Task
     label = "Tasks & work proof"
@@ -136,7 +144,8 @@ class PMPlanResource(Resource):
     readonly_fields = ["approved_by"]
     filter_fields = ["status", "interval", "asset", "assignee"]
     search_fields = ["doc_no", "title"]
-    field_help = {"checklist": '[{"id":1,"text":"Oil level within marks","critical":true}] - template revisions never change past sign-offs.'}
+    json_editors = {"checklist": CHECKLIST_EDITOR}
+    field_help = {"checklist": "Template changes never alter past sign-offs."}
     help = {"boundary": "An unapproved template stays inactive. Calendar buckets are configurable; actual oil/filter/electrical work follows the model-specific OEM manual."}
 
     def edit_block_reason(self, request, obj):

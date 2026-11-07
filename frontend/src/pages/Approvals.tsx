@@ -4,7 +4,8 @@ import { api, ApiError, get, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
 import { Empty, ErrorBox, Pill, FieldLabel } from "../components/ui";
-import { fmtDateTime } from "../format";
+import { fmtDateTime, humanize } from "../format";
+import { inlineValue } from "../components/DataView";
 
 type Approval = {
   id: string; summary: string; kind: string; status: string; created_by: string; created_by_label: string; created_at: string;
@@ -19,8 +20,6 @@ const TABS = [
   { key: "mine", label: "My requests" },
   { key: "history", label: "Decided" },
 ] as const;
-
-const show = (v: any) => (v === null || v === undefined || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 export function ApprovalsInbox() {
   const { profile } = useAuth();
@@ -125,7 +124,7 @@ export function ApprovalDetail() {
           <table className="mini diff">
             <thead><tr><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
             <tbody>{changes.map(([k, v]) => (
-              <tr key={k}><td>{k.replace(/_/g, " ")}</td><td className="old">{show(Array.isArray(v) ? v[0] : "")}</td><td className="new">{show(Array.isArray(v) ? v[1] : v)}</td></tr>
+              <tr key={k}><td>{humanize(k)}</td><td className="old">{inlineValue(Array.isArray(v) ? v[0] : "")}</td><td className="new">{inlineValue(Array.isArray(v) ? v[1] : v)}</td></tr>
             ))}</tbody>
           </table>
         )}

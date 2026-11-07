@@ -68,6 +68,8 @@ class PackingRecordResource(Resource):
 
 @register
 class DispatchResource(Resource):
+    json_editors = {"loading_checks": {"fixed": [{"key": "monsoon_season", "label": "Monsoon season shipment (tarpaulin check required)"}],
+                                       "key_label": "Check", "key_placeholder": "e.g. Vehicle floor clean", "add_label": "Add check"}}
     key = "fg.dispatch"
     server_defaults = ["planned_date"]
     model = Dispatch

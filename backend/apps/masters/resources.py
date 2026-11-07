@@ -291,7 +291,7 @@ class ArtworkResource(MasterResource):
             if impact:
                 notify_perm(
                     "planning.productionrequest.view", f"Artwork {obj.code} changed to R{obj.revision}",
-                    body=str(impact), severity="warning", resource="masters.artwork", object_id=obj.pk,
+                    body=audit.readable(impact), severity="warning", resource="masters.artwork", object_id=obj.pk,
                     next_action="Review old label stock, open POs and planned jobs; record disposition", dedupe_key=f"artwork-change:{obj.pk}",
                 )
         before = obj.status

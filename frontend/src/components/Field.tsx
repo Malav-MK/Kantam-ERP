@@ -3,6 +3,7 @@ import { get } from "../api";
 import type { FieldMeta, ResourceMeta, Row } from "../types";
 import { RecordForm } from "./Forms";
 import Icon from "./Icon";
+import StructuredInput from "./JsonEditors";
 import { Modal } from "./ui";
 
 const metaCache = new Map<string, Promise<ResourceMeta>>();
@@ -229,7 +230,7 @@ export function FieldInput({ meta, value, onChange, values, parent, record, labe
     case "datetime":
       return <input type="datetime-local" value={toLocalInput(value)} onChange={(e) => onChange(e.target.value ? new Date(e.target.value).toISOString() : null)} disabled={disabled} required={meta.required} />;
     case "json":
-      return <JsonInput value={value} onChange={onChange} disabled={disabled} />;
+      return <StructuredInput meta={meta} value={value} onChange={onChange} disabled={disabled} />;
     case "password":
       return <input type="password" autoComplete="new-password" value={value ?? ""} onChange={(e) => onChange(e.target.value)} required={meta.required} />;
     case "lookup":
@@ -263,18 +264,4 @@ function toLocalInput(v?: string | null) {
   const d = new Date(v);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function JsonInput({ value, onChange, disabled }: { value: any; onChange: (v: any) => void; disabled?: boolean }) {
-  const [text, setText] = useState(() => (value === undefined || value === null ? "" : JSON.stringify(value, null, 2)));
-  const [bad, setBad] = useState(false);
-  return (
-    <>
-      <textarea className={`mono ${bad ? "invalid" : ""}`} rows={5} value={text} disabled={disabled} onChange={(e) => {
-        setText(e.target.value);
-        try { onChange(e.target.value.trim() ? JSON.parse(e.target.value) : null); setBad(false); } catch { setBad(true); }
-      }} />
-      {bad && <span className="small danger-text">Not valid JSON yet</span>}
-    </>
-  );
 }

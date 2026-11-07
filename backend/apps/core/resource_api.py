@@ -94,6 +94,8 @@ def field_meta(res, name, user, writable=False):
         meta["help"] = field_guide(res.key, name, meta["type"], meta.get("help", ""))
     if name in res.multi_create_fields:
         meta["multi_on_create"] = True
+    if name in res.json_editors:
+        meta["editor"] = res.json_editors[name]
     if name in res.depends:
         meta["depends"] = res.depends[name]
     if name in res.filter_defaults:

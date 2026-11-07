@@ -1,8 +1,9 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, get, newIdempotencyKey, openProtected, protectedBlobUrl } from "../api";
-import { fmtDateTime } from "../format";
+import { fmtDateTime, humanize } from "../format";
 import { ErrorBox } from "./ui";
 import Icon from "./Icon";
+import { inlineValue } from "./DataView";
 
 type Att = { id: string; purpose: string; proof_round: number; name: string; mime_type: string; size: number; sha256: string;
   classification: string; capture_source: string; uploaded_by: string; uploaded_at: string; frozen: boolean; note: string };
@@ -106,7 +107,7 @@ export function History({ resource, id, refreshKey }: { resource: string; id: st
               <details className="small"><summary>{Object.keys(h.changes).length} change(s)</summary>
                 <table className="mini"><tbody>
                   {Object.entries(h.changes).map(([k, v]) => (
-                    <tr key={k}><td>{k}</td><td>{Array.isArray(v) && v.length === 2 ? <><s>{fmt(v[0])}</s> → {fmt(v[1])}</> : fmt(v)}</td></tr>
+                    <tr key={k}><td>{humanize(k)}</td><td>{Array.isArray(v) && v.length === 2 ? <><s>{inlineValue(v[0])}</s> → {inlineValue(v[1])}</> : inlineValue(v)}</td></tr>
                   ))}
                 </tbody></table>
               </details>
@@ -119,4 +120,3 @@ export function History({ resource, id, refreshKey }: { resource: string; id: st
   );
 }
 
-const fmt = (v: any) => (v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));

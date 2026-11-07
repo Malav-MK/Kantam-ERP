@@ -225,7 +225,12 @@ dl.kv > div { display: flex; gap: 8px; } dl.kv dt { color: var(--muted); min-wid
 .checklist-row { display: grid; grid-template-columns: 1fr 160px; gap: 8px; align-items: center; }
 .crit { color: var(--danger); font-size: 11px; }
 .blockers { margin: 0; padding-left: 18px; color: var(--danger); }
-pre.result { background: var(--surface-2); padding: 10px; border-radius: 8px; max-height: 360px; overflow: auto; font-size: 12px; }
+.data-view th[scope="row"] { width: 40%; white-space: nowrap; }
+.data-view .data-view { font-size: 12px; }
+.json-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.json-editor .table-wrap { width: 100%; }
+.json-editor td input:not([type="checkbox"]), .json-editor td select { width: 100%; min-width: 90px; }
+.json-editor td input[type="checkbox"] { width: 18px; height: 18px; min-height: auto; }
 
 .overlay { position: fixed; inset: 0; background: rgba(8, 14, 12, 0.45); display: grid; place-items: center; z-index: 40; padding: 16px; }
 .modal { width: min(560px, 100%); max-height: 92vh; display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }

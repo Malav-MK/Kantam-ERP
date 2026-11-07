@@ -153,7 +153,7 @@ def apply_line_amendment(approval, approver):
     regenerate_demand(line)
     SOVersion.objects.create(so=so, version=so.version, snapshot=so_snapshot(so), reason=approval.reason, approval=approval, created_by=approver)
     audit.record("so_amended", "sales.soline", line, changes=audit.diff(before, audit.snapshot(line)), reason=approval.reason, approval_ref=approval.pk)
-    notify_perm("planning.planline.update", f"SO amendment approved: {line}", body=str(approval.payload.get("impact")), severity="warning",
+    notify_perm("planning.planline.update", f"SO amendment approved: {line}", body=audit.readable(approval.payload.get("impact")), severity="warning",
                 resource="sales.soline", object_id=line.pk, next_action="Review plan, PRs and material reservations",
                 dedupe_key=f"so-amend:{approval.pk}")
 

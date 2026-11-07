@@ -1,5 +1,17 @@
 export type Choice = { value: string; label: string };
 
+export type JsonColumn = { name: string; label: string; type?: "boolean" | "pass_fail"; placeholder?: string; choices?: Choice[] };
+
+/** How a structured (JSON) column is entered: rows with columns, or tick boxes plus named checks. */
+export type JsonEditor = {
+  columns?: JsonColumn[];
+  auto_id?: boolean;
+  fixed?: { key: string; label: string }[];
+  key_label?: string;
+  key_placeholder?: string;
+  add_label?: string;
+};
+
 export type FieldMeta = {
   name: string;
   label: string;
@@ -18,6 +30,7 @@ export type FieldMeta = {
   filter_default?: Record<string, string>;
   /** The create form lets the user pick several values; one record is saved per value. */
   multi_on_create?: boolean;
+  editor?: JsonEditor;
   /** Only shown (and then required) when another field has this value. */
   show_if?: Record<string, string>;
 };

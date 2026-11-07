@@ -7,8 +7,9 @@ import { ActionDialog, DeleteDialog, RecordForm } from "../components/Forms";
 import { Attachments, History } from "../components/Evidence";
 import { Empty, ErrorBox, Help, Modal, Pill } from "../components/ui";
 import Icon from "../components/Icon";
-import { display, titleOf } from "../format";
+import { display, titleOf, humanize } from "../format";
 import type { ActionMeta, ResourceMeta, Row } from "../types";
+import DataView from "../components/DataView";
 
 const DOCS: Record<string, { kind: string; label: string }[]> = {
   "sales.salesorder": [{ kind: "so", label: "SO document" }],
@@ -212,37 +213,12 @@ function ExtraPanel({ extra }: { extra: Record<string, any> }) {
       <div className="extra">
         {entries.map(([k, v]) => (
           <div key={k} className="extra-item">
-            <div className="extra-key">{k.replace(/_/g, " ")}</div>
-            <Value v={v} />
+            <div className="extra-key">{humanize(k)}</div>
+            <DataView value={v} />
           </div>
         ))}
       </div>
     </section>
-  );
-}
-
-function Value({ v }: { v: any }): JSX.Element {
-  if (v === null || v === undefined) return <span className="muted">—</span>;
-  if (typeof v === "boolean") return <span>{v ? "Yes" : "No"}</span>;
-  if (typeof v !== "object") return <span>{String(v)}</span>;
-  if (Array.isArray(v)) {
-    if (v.length && typeof v[0] === "object" && !Array.isArray(v[0])) {
-      const cols = Array.from(new Set(v.flatMap((r) => Object.keys(r)))).filter((c) => typeof v[0][c] !== "object" || v[0][c] === null);
-      return (
-        <div className="table-wrap"><table className="mini">
-          <thead><tr>{cols.map((c) => <th key={c}>{c.replace(/_/g, " ")}</th>)}</tr></thead>
-          <tbody>{v.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c}>{typeof r[c] === "object" ? JSON.stringify(r[c]) : String(r[c] ?? "")}</td>)}</tr>)}</tbody>
-        </table></div>
-      );
-    }
-    return <span>{v.map((x) => (typeof x === "object" ? JSON.stringify(x) : String(x))).join(", ")}</span>;
-  }
-  return (
-    <dl className="kv">
-      {Object.entries(v).map(([k, x]) => (
-        <div key={k}><dt>{k.replace(/_/g, " ")}</dt><dd>{typeof x === "object" && x !== null ? <Value v={x} /> : String(x ?? "—")}</dd></div>
-      ))}
-    </dl>
   );
 }
 
@@ -295,7 +271,7 @@ export function ResourceDetail() {
           {fields.filter((f) => row[f] !== undefined || row[`${f}_label`] !== undefined).map((f) => (
             <div key={f} className={meta.fields[f]?.type === "json" || meta.fields[f]?.type === "textarea" ? "span2" : ""}>
               <dt>{meta.fields[f]?.label ?? f.replace(/_/g, " ")}</dt>
-              <dd>{meta.fields[f]?.type === "json" ? <Value v={row[f]} /> : display(row, f, meta.fields[f]) || <span className="muted">—</span>}</dd>
+              <dd>{meta.fields[f]?.type === "json" ? <DataView value={row[f]} /> : display(row, f, meta.fields[f]) || <span className="muted">—</span>}</dd>
             </div>
           ))}
         </dl>

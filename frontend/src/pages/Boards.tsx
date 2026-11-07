@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime } from "../format";
 import KantamLogo from "../components/KantamLogo";
 import Icon from "../components/Icon";
 import { Screen, useScreens } from "../components/Layout";
+import DataView from "../components/DataView";
 
 function usePoll<T>(url: string, ms = 60_000, params?: Record<string, any>) {
   const [data, setData] = useState<T | null>(null);
@@ -357,7 +358,7 @@ export function AuditLog() {
         <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>Changes</th><th>Reason</th><th>IP</th></tr></thead>
         <tbody>{data?.results.map((e) => (
           <tr key={e.id}><td>{fmtDateTime(e.at)}</td><td>{e.actor}</td><td>{e.action}</td><td>{e.resource} {e.doc_no}</td>
-            <td className="small mono clip">{JSON.stringify(e.changes)}</td><td className="small">{e.reason}</td><td className="small">{e.ip}</td></tr>))}</tbody>
+            <td className="small">{e.changes && Object.keys(e.changes).length > 0 && <details><summary>{Object.keys(e.changes).length} value(s)</summary><DataView value={e.changes} /></details>}</td><td className="small">{e.reason}</td><td className="small">{e.ip}</td></tr>))}</tbody>
       </table></div>
       {data && data.count > 50 && <div className="pager"><button className="btn" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button><span className="muted">Page {page}</span><button className="btn" disabled={page * 50 >= data.count} onClick={() => setPage(page + 1)}>Next</button></div>}
     </div>
