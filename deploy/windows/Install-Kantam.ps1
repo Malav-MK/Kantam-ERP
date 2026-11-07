@@ -506,7 +506,7 @@ try {
     if ($FirstInstall -and $bootstrapOutput) {
         $code = [regex]::Match($bootstrapOutput, 'shown once\): (\S+)').Groups[1].Value
         Write-Host " Owner username       : owner"
-        Write-Host " Device enrolment code: $code   (valid 24 hours, for this server's browser)"
+        Write-Host " Device enrolment code: $code   (no time limit, for this server's browser)"
     }
     $admin = Join-Path $InstallDir 'bin\KantamAdmin.ps1'
     Write-Host " Admin tool              : $admin"

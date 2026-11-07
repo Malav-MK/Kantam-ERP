@@ -6,12 +6,10 @@ There are no default passwords: the owner password is typed at the terminal
 """
 import getpass
 import os
-from datetime import timedelta
 
 from django.contrib.auth import password_validation
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.utils import timezone
 
 from apps.core.auth_views import new_enrollment_code
 from apps.core.models import Company, Department, Device, Role, Site, User, UserRole
@@ -81,5 +79,5 @@ class Command(BaseCommand):
 
         code, code_hash = new_enrollment_code()
         Device.objects.create(name=o["device_name"], kind="pc", site=site, enrollment_code_hash=code_hash,
-                              enrollment_expires=timezone.now() + timedelta(hours=24), created_by=user)
-        self.stdout.write(self.style.WARNING(f"Device enrolment code for '{o['device_name']}' (valid 24h, shown once): {code}"))
+                              created_by=user)
+        self.stdout.write(self.style.WARNING(f"Device enrolment code for '{o['device_name']}' (no time limit, shown once): {code}"))

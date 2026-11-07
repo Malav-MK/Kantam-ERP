@@ -29,7 +29,7 @@ This guide is for the person setting up Kantam ERP on the factory's Windows PC o
 4. At the end, the script prints:
    - the **address**, e.g. `https://KANTAM-SRV`;
    - the **owner username** (`owner`);
-   - a **device enrolment code**, valid 24 hours, for this server's browser.
+   - a **device enrolment code** for this server's browser. It works once, has no time limit, and only the owner can expire it unused.
 
 Installation takes about 10–20 minutes, depending on download speed.
 

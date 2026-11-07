@@ -72,7 +72,7 @@ class DeviceEnrollView(APIView):
         if recent_failures >= 10:
             return Response({"error": "throttled", "message": "Too many attempts. Try later."}, status=429)
         now = timezone.now()
-        device = Device.objects.filter(status="pending", enrollment_code_hash=sha256(code), enrollment_expires__gt=now).first() if code else None
+        device = Device.objects.filter(status="pending", enrollment_code_hash=sha256(code)).first() if code else None
         if device is None:
             LoginAttempt.objects.create(username="(device)", ip=ip, success=False, reason="enroll")
             return Response({"error": "invalid_code", "message": "Enrolment code is invalid or expired."}, status=400)
@@ -256,13 +256,15 @@ class MfaVerifyView(APIView):
         _require_xhr(request)
         user, device, typ = _user_from_mfa_token(request, str(request.data.get("mfa_token", "")), ["mfa", "mfa_setup"])
         code = str(request.data.get("code", "")).strip()
-        if not user.mfa_secret or not pyotp.TOTP(user.mfa_secret).verify(code, valid_window=1):
+        demo_code = bool(ZT["DEMO_MFA_CODE"]) and code == ZT["DEMO_MFA_CODE"]
+        if not demo_code and (not user.mfa_secret or not pyotp.TOTP(user.mfa_secret).verify(code, valid_window=1)):
             user.failed_logins += 1
             if user.failed_logins >= ZT["MAX_FAILED_LOGINS"]:
                 user.locked_until = timezone.now() + timedelta(seconds=ZT["LOCKOUT_SECONDS"])
             user.save(update_fields=["failed_logins", "locked_until"])
             return Response({"error": "invalid_code", "message": "Invalid authentication code."}, status=401)
-        if typ == "mfa_setup" and not user.mfa_enabled:
+        # A demo code proves nothing about the authenticator app, so setup stays unfinished.
+        if typ == "mfa_setup" and not user.mfa_enabled and not demo_code:
             user.mfa_enabled = True
             user.save(update_fields=["mfa_enabled"])
             audit.record("mfa_enrolled", "core.user", user, actor=user)

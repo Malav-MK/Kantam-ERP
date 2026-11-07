@@ -180,6 +180,8 @@ ZERO_TRUST = {
     "SESSION_IDLE_SECONDS": int(env("ZT_SESSION_IDLE", "1800")),
     "SESSION_ABSOLUTE_SECONDS": int(env("ZT_SESSION_ABSOLUTE", str(13 * 3600))),
     "MFA_REQUIRED_ROLE_LEVELS": env_list("ZT_MFA_LEVELS", "owner,admin,manager"),
+    # Fixed two-step code for local demos. Ignored outside DEBUG, so it cannot reach production.
+    "DEMO_MFA_CODE": env("KANTAM_DEMO_MFA_CODE", "") if DEBUG else "",
     "MAX_FAILED_LOGINS": int(env("ZT_MAX_FAILED_LOGINS", "5")),
     "LOCKOUT_SECONDS": int(env("ZT_LOCKOUT_SECONDS", "900")),
     "KEY_DIR": Path(env("ZT_KEY_DIR", str(BASE_DIR / "keys"))),

@@ -210,7 +210,7 @@ switch ($Command) {
     'new-device' {
         if (-not $Target) { throw 'Give the device name, e.g. KantamAdmin.ps1 new-device "Gate tablet" -Kind gate' }
         Invoke-Manage @('create_device', $Target, '--kind', $Kind)
-        Write-Note 'Open the ERP on that device and enter the code within 24 hours.'
+        Write-Note 'Open the ERP on that device and enter the code. It has no time limit; only the owner can expire it.'
     }
     'create-user' {
         if (-not $Target -or -not $Name -or $Role.Count -eq 0) { throw 'Usage: create-user <username> -Name "Full name" -Role <role>[,<role>] [-Department CODE]' }

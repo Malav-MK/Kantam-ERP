@@ -1,5 +1,4 @@
 """Administration resources: people lookup, users, roles, devices, sessions, approvals, outbox."""
-from datetime import timedelta
 
 from django.contrib.auth import password_validation
 from django.db.models import Q
@@ -389,6 +388,10 @@ def models_F(name):
     return F(name)
 
 
+def _code_outstanding(device):
+    return device.status == "pending" and bool(device.enrollment_code_hash)
+
+
 @register
 class DeviceResource(Resource):
     key = "core.device"
@@ -405,17 +408,22 @@ class DeviceResource(Resource):
     search_fields = ["name"]
     help = {
         "why": "Zero trust: an approved network alone does not prove a trusted device. Each PC/tablet/gate/TV is enrolled once.",
-        "steps": "Create the device, read the one-time code on the device's enrolment screen within 24 hours.",
+        "steps": "Create the device, read the one-time code on the device's enrolment screen. It has no time limit; only the owner can expire an unused code.",
         "boundary": "Revoking a device ends every session on it immediately.",
     }
 
     def create(self, request, data):
         code, code_hash = new_enrollment_code()
         device = Device.objects.create(
-            enrollment_code_hash=code_hash, enrollment_expires=timezone.now() + timedelta(hours=24), created_by=request.user, **data,
+            enrollment_code_hash=code_hash, created_by=request.user, **data,
         )
         request._enrollment_code = code
         return device
+
+    def delete_block_reason(self, request, obj):
+        if _code_outstanding(obj) and not is_owner(request.user):
+            return "Only the owner can end an unused enrolment code."
+        return None
 
     def extra_detail(self, request, obj):
         code = getattr(request, "_enrollment_code", None)
@@ -426,13 +434,20 @@ class DeviceResource(Resource):
             raise BusinessRuleError("Revoked devices cannot be re-enrolled; create a new device.", "invalid_state")
         code, code_hash = new_enrollment_code()
         obj.enrollment_code_hash = code_hash
-        obj.enrollment_expires = timezone.now() + timedelta(hours=24)
+        obj.enrollment_expires = None
         obj.status = "pending"
         obj.secret_hash = ""
         obj.save()
         AuthSession.objects.filter(device=obj, revoked_at__isnull=True).update(revoked_at=timezone.now(), revoke_reason="device_reenrolled")
         audit.record("device_code_issued", "core.device", obj, reason=data.get("reason", ""))
-        return {"enrollment_code": code, "expires": obj.enrollment_expires}
+        return {"enrollment_code": code}
+
+    def _expire_code(request, obj, data):
+        obj.enrollment_code_hash = ""
+        obj.enrollment_expires = timezone.now()
+        obj.save()
+        audit.record("device_code_expired", "core.device", obj, reason=data.get("reason", ""))
+        return obj
 
     def _revoke(request, obj, data):
         obj.status = "revoked"
@@ -445,9 +460,12 @@ class DeviceResource(Resource):
         return obj
 
     actions = [
-        Action("new_code", "Issue enrolment code", _new_code, permission="security.devices.manage", reason_required=True),
+        Action("new_code", "Issue enrolment code", _new_code, permission="security.devices.manage", reason_required=True,
+               available=lambda o, r: is_owner(r.user) or not _code_outstanding(o)),
+        Action("expire_code", "Expire enrolment code", _expire_code, permission="security.devices.manage", reason_required=True, tone="danger",
+               available=lambda o, r: is_owner(r.user) and _code_outstanding(o)),
         Action("revoke", "Revoke device", _revoke, permission="security.devices.manage", reason_required=True, tone="danger",
-               available=lambda o, r: o.status != "revoked"),
+               available=lambda o, r: o.status != "revoked" and (is_owner(r.user) or not _code_outstanding(o))),
     ]
 
 
