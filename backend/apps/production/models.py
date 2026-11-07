@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, DocumentRecord, ShiftLock
 from apps.masters.models import Machine, Reason
 
@@ -19,16 +20,16 @@ class ProductionReport(DocumentRecord):
     supervisor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     actual_start = models.DateTimeField()
     actual_end = models.DateTimeField()
-    active_cavities = models.PositiveSmallIntegerField()
+    active_cavities = QtyField()
     actual_cycle_s = models.DecimalField("Actual cycle (s)", max_digits=6, decimal_places=2)
-    total_moulded = models.PositiveIntegerField()
-    good_qty = models.PositiveIntegerField("Accepted / good")
-    held_qty = models.PositiveIntegerField("QC held", default=0)
-    rejected_qty = models.PositiveIntegerField(default=0)
-    startup_loss_pcs = models.PositiveIntegerField("Start-up / purge loss (pcs)", default=0)
+    total_moulded = QtyField()
+    good_qty = QtyField("Accepted / good")
+    held_qty = QtyField("QC held", default=0)
+    rejected_qty = QtyField(default=0)
+    startup_loss_pcs = QtyField("Start-up / purge loss (pcs)", default=0)
     defect_reasons = models.CharField(max_length=300, blank=True)
-    setup_minutes = models.PositiveIntegerField(default=0)
-    label_loss = models.PositiveIntegerField(default=0)
+    setup_minutes = QtyField(default=0)
+    label_loss = QtyField(default=0)
     extra_classification = models.CharField(max_length=10, choices=EXTRA, default="none")
     status = models.CharField(max_length=10, choices=STATUS, default="draft", db_index=True)
     good_lot = models.ForeignKey("inventory.Lot", null=True, blank=True, on_delete=models.PROTECT, related_name="+")

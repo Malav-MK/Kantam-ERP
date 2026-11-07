@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import DocumentRecord
 from apps.masters.models import Customer, Product
 
@@ -17,7 +18,7 @@ class Inspection(DocumentRecord):
     grn_line = models.ForeignKey("purchase.GRNLine", null=True, blank=True, on_delete=models.PROTECT, related_name="inspections")
     inspector = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     spec_revision = models.CharField(max_length=40, blank=True)
-    sample_size = models.PositiveIntegerField(default=0)
+    sample_size = QtyField(default=0)
     results = models.JSONField(default=list, blank=True, help_text='[{"parameter","component","spec","actual","unit","pass"}] - container and lid kept separate')
     checklist = models.JSONField(default=dict, blank=True)
     remarks = models.TextField(blank=True)
@@ -44,7 +45,7 @@ class Complaint(DocumentRecord):
     complaint_date = models.DateField()
     kind = models.CharField(max_length=12, choices=KINDS)
     severity = models.CharField(max_length=10, choices=SEVERITY, default="medium")
-    qty_affected = models.PositiveIntegerField(default=0)
+    qty_affected = QtyField(default=0)
     description = models.TextField()
     status = models.CharField(max_length=14, choices=STATUS, default="reported", db_index=True)
     containment = models.TextField(blank=True)

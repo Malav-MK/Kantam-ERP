@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, DocumentRecord
 from apps.masters.models import COMPONENT_TYPES, Artwork, Customer, Item, PackingRule, Product, ProductComponent
 
@@ -61,16 +62,16 @@ class SOLine(BaseRecord):
     masterbatch = models.ForeignKey(Item, null=True, blank=True, on_delete=models.PROTECT, related_name="+", help_text="Masterbatch colour follows the SO")
     impact_modifier = models.BooleanField(default=False)
     iml = models.BooleanField("IML", default=True)
-    qty = models.PositiveIntegerField(help_text="Sets for complete-set lines, pieces for component-only lines")
+    qty = QtyField(help_text="Sets for complete-set lines, pieces for component-only lines")
     unit_price = models.DecimalField(max_digits=12, decimal_places=4, default=0)
     requested_date = models.DateField(null=True, blank=True)
     committed_date = models.DateField(null=True, blank=True)
     packing_rule = models.ForeignKey(PackingRule, null=True, blank=True, on_delete=models.PROTECT)
-    priority = models.PositiveSmallIntegerField(default=3)
+    priority = QtyField(default=3)
     special_instructions = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=STATUS, default="open", db_index=True)
-    cancelled_qty = models.PositiveIntegerField(default=0)
-    dispatched_qty = models.PositiveIntegerField(default=0)
+    cancelled_qty = QtyField(default=0)
+    dispatched_qty = QtyField(default=0)
     at_risk = models.BooleanField(default=False)
     risk_note = models.CharField(max_length=300, blank=True)
 
@@ -95,7 +96,7 @@ class ComponentDemand(BaseRecord):
     component_type = models.CharField(max_length=10, choices=COMPONENT_TYPES)
     item = models.ForeignKey(Item, on_delete=models.PROTECT)
     artwork = models.ForeignKey(Artwork, null=True, blank=True, on_delete=models.PROTECT)
-    required_qty = models.PositiveIntegerField()
+    required_qty = QtyField()
     active = models.BooleanField(default=True)
 
     class Meta:

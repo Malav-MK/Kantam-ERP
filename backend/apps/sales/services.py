@@ -5,6 +5,8 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from apps.core.calc import plain
+from apps.core.fields import parse_qty
 from apps.core import audit
 from apps.core.api import BusinessRuleError
 from apps.core.rbac import has_perm
@@ -118,7 +120,7 @@ def amendment_impact(line, changes):
     prs = ProductionRequest.objects.filter(so_line=line, status__in=["draft", "released", "in_progress"])
     return {
         "active_prs": [p.doc_no for p in prs],
-        "produced_good": int(quantities(line)["good_produced"]),
+        "produced_good": plain(quantities(line)["good_produced"]),
         "dispatched": line.dispatched_qty,
         "note": "Quantity/date/artwork amendments recalculate remaining demand; produced and dispatched quantities stay recorded.",
     }
@@ -139,7 +141,7 @@ def apply_line_amendment(approval, approver):
             setattr(line, field, Item.objects.get(pk=value) if value else None)
         else:
             setattr(line, field, value)
-    if "qty" in new and int(new["qty"]) < line.dispatched_qty:
+    if "qty" in new and parse_qty(new["qty"]) < line.dispatched_qty:
         raise BusinessRuleError("New quantity is below already dispatched quantity.", "invalid_qty")
     validate_line(line)
     line.row_version += 1

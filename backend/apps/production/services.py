@@ -4,6 +4,7 @@ import datetime
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from apps.core.fields import parse_qty
 from apps.core import audit, calc
 from apps.core.api import BusinessRuleError
 from apps.core.models import ShiftLock
@@ -142,9 +143,9 @@ def admin_correct(report, changes, reason, user):
     deltas = {}
     for f in ("good_qty", "held_qty", "rejected_qty"):
         if f in changes:
-            deltas[f] = int(changes[f]) - getattr(report, f)
+            deltas[f] = parse_qty(changes[f]) - getattr(report, f)
     for k, v in changes.items():
-        setattr(report, k, v)
+        setattr(report, k, parse_qty(v) if k in {"good_qty", "held_qty", "rejected_qty", "total_moulded"} else v)
     if not calc.reconcile_output(report.total_moulded, report.good_qty, report.held_qty, report.rejected_qty):
         raise BusinessRuleError("Corrected quantities do not reconcile.", "output_not_reconciled")
     adj = inv.virtual_location("adjustment")

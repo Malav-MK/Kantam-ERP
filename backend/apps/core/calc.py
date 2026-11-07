@@ -17,6 +17,12 @@ def D(value):
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
+def plain(value):
+    """A quantity at 3 decimal places: int when whole, Decimal otherwise."""
+    number = D(value).quantize(Decimal("0.001"), ROUND_HALF_UP)
+    return int(number) if number == number.to_integral_value() else number.normalize()
+
+
 def _positive(name, value):
     if value is None or D(value) <= 0:
         raise CalcError(f"{name} must be greater than zero")
@@ -39,7 +45,7 @@ def planned_moulded_pieces(run_hours, active_cavities, cycle_seconds):
 def gross_target(required_good, expected_yield_pct=None):
     """ceil(required good / yield) - the loss is applied once only."""
     if not expected_yield_pct:
-        return int(D(required_good))
+        return int(math.ceil(D(required_good)))
     y = _positive("yield %", expected_yield_pct) / 100
     if y > 1:
         raise CalcError("yield % cannot exceed 100")
@@ -92,7 +98,7 @@ def label_requirement(gross_pieces, iml, labels_per_piece=1, allowance_pct=0):
     """IML gross pcs x labels/pc + separately approved allowance. Non-IML = 0."""
     if not iml:
         return {"base": 0, "allowance": 0, "total": 0}
-    base = int(D(gross_pieces) * D(labels_per_piece))
+    base = int(math.ceil(D(gross_pieces) * D(labels_per_piece)))
     allowance = int(math.ceil(base * D(allowance_pct or 0) / 100))
     return {"base": base, "allowance": allowance, "total": base + allowance}
 
@@ -100,7 +106,7 @@ def label_requirement(gross_pieces, iml, labels_per_piece=1, allowance_pct=0):
 def packing_requirement(packed_pieces, pcs_per_bag, pcs_per_carton):
     bags = int(math.ceil(D(packed_pieces) / _positive("pcs per bag", pcs_per_bag)))
     cartons = int(math.ceil(D(packed_pieces) / _positive("pcs per carton", pcs_per_carton)))
-    partial = int(D(packed_pieces) % D(pcs_per_carton))
+    partial = plain(D(packed_pieces) % D(pcs_per_carton))
     return {"bags": bags, "cartons": cartons, "partial_carton_pcs": partial}
 
 
@@ -130,7 +136,7 @@ def matchable_sets(component_balances, qty_per_set=None):
 
 def reconcile_output(total_moulded, accepted, held, rejected):
     """Exclusive buckets: total moulded = accepted + held + rejected (p.10)."""
-    return int(total_moulded) == int(accepted) + int(held) + int(rejected)
+    return D(total_moulded) == D(accepted) + D(held) + D(rejected)
 
 
 def oee(availability, performance, quality):

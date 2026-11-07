@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from apps.core.fields import parse_qty
 from apps.core import audit
 from apps.core.rbac import is_owner
 from apps.core.api import BusinessRuleError
@@ -99,7 +100,7 @@ def transition(task, user, action, data):
             if k in data and data[k] not in (None,):
                 setattr(task, k, data[k])
         if data.get("actual_minutes"):
-            task.actual_minutes = int(data["actual_minutes"])
+            task.actual_minutes = parse_qty(data["actual_minutes"])
         missing = proof_satisfied(task)
         if missing:
             raise BusinessRuleError("Submission blocked - proof missing: " + "; ".join(missing), "proof_required", {"missing": missing})

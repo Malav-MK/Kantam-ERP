@@ -10,6 +10,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord
 
 COMPONENT_TYPES = [("container", "Container / tub"), ("lid", "Lid"), ("handle", "Handle")]
@@ -27,7 +28,7 @@ class Customer(BaseRecord):
     freight_basis = models.CharField(max_length=60, default="Ex-Works Bareja")
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     advance_required_pct = models.DecimalField(max_digits=5, decimal_places=2, default=50)
-    lead_time_days = models.PositiveIntegerField(default=21)
+    lead_time_days = QtyField(default=21)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+", verbose_name="Account owner")
     active = models.BooleanField(default=True)
 
@@ -46,7 +47,7 @@ class Supplier(BaseRecord):
     gstin = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     payment_terms = models.CharField(max_length=120, blank=True)
-    lead_time_days = models.PositiveIntegerField(default=7)
+    lead_time_days = QtyField(default=7)
     active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -92,7 +93,7 @@ class Item(BaseRecord):
     safety_stock = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     moq = models.DecimalField("MOQ", max_digits=14, decimal_places=3, default=0)
     order_multiple = models.DecimalField(max_digits=14, decimal_places=3, default=0)
-    lead_time_days = models.PositiveIntegerField(default=7)
+    lead_time_days = QtyField(default=7)
     default_supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.PROTECT)
     standard_cost = models.DecimalField(max_digits=14, decimal_places=4, default=0)
     legacy_code = models.CharField(max_length=60, blank=True, help_text="Existing ID preserved from migration")
@@ -117,7 +118,7 @@ class Product(BaseRecord):
     code = models.CharField(max_length=40, unique=True)
     name = models.CharField(max_length=200)
     shape = models.CharField(max_length=12, choices=SHAPES)
-    capacity_ml = models.PositiveIntegerField(null=True, blank=True)
+    capacity_ml = QtyField(null=True, blank=True)
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.PROTECT, help_text="Blank = common design available to all customers")
     customer_code = models.CharField(max_length=60, blank=True)
     iml = models.BooleanField("IML", default=True)
@@ -132,10 +133,10 @@ class ProductComponent(BaseRecord):
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="components")
     component_type = models.CharField(max_length=10, choices=COMPONENT_TYPES)
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+", help_text="SFG component item")
-    qty_per_set = models.PositiveSmallIntegerField(default=1)
+    qty_per_set = QtyField(default=1)
     weight_g = models.DecimalField("Shot contribution (g/pc)", max_digits=8, decimal_places=2)
     iml = models.BooleanField("IML", default=True)
-    labels_per_piece = models.PositiveSmallIntegerField(default=1)
+    labels_per_piece = QtyField(default=1)
     procured = models.BooleanField(default=False, help_text="Bought-in rather than moulded (e.g. some handles)")
 
     class Meta:
@@ -204,7 +205,7 @@ class Artwork(BaseRecord):
 class Recipe(BaseRecord):
     BASIS = [("total_blend", "Total blend (fractions sum to 100%)"), ("base_resin", "Base resin (additives % of resin)")]
     product_component = models.ForeignKey(ProductComponent, on_delete=models.PROTECT, related_name="recipes")
-    revision = models.PositiveSmallIntegerField(default=1)
+    revision = QtyField(default=1)
     basis = models.CharField(max_length=12, choices=BASIS, default="total_blend")
     loss_allowance_pct = models.DecimalField("Runner/startup/purge allowance %", max_digits=5, decimal_places=2, default=0)
     label_allowance_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -226,7 +227,7 @@ class RecipeLine(BaseRecord):
     item = models.ForeignKey(Item, on_delete=models.PROTECT)
     percent = models.DecimalField(max_digits=6, decimal_places=3)
     is_masterbatch = models.BooleanField(default=False)
-    sequence = models.PositiveSmallIntegerField(default=1)
+    sequence = QtyField(default=1)
 
     class Meta:
         ordering = ["sequence"]
@@ -234,13 +235,13 @@ class RecipeLine(BaseRecord):
 
 class PackingRule(BaseRecord):
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="packing_rules")
-    revision = models.PositiveSmallIntegerField(default=1)
-    pcs_per_bag = models.PositiveIntegerField()
-    pcs_per_carton = models.PositiveIntegerField()
+    revision = QtyField(default=1)
+    pcs_per_bag = QtyField()
+    pcs_per_carton = QtyField()
     bag_item = models.ForeignKey(Item, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     carton_item = models.ForeignKey(Item, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     tape_item = models.ForeignKey(Item, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
-    cartons_per_tape_roll = models.PositiveIntegerField(default=0)
+    cartons_per_tape_roll = QtyField(default=0)
     effective_from = models.DateField()
     active = models.BooleanField(default=True)
 
@@ -256,12 +257,12 @@ class Machine(BaseRecord):
     make = models.CharField(max_length=60, blank=True)
     model_no = models.CharField("Model", max_length=60, blank=True)
     serial_no = models.CharField(max_length=60, blank=True)
-    tonnage = models.PositiveIntegerField(null=True, blank=True)
+    tonnage = QtyField(null=True, blank=True)
     drive_type = models.CharField(max_length=10, choices=DRIVES, default="hydraulic")
     has_iml_robot = models.BooleanField("IML robot fitted", default=False)
     robot_ref = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=12, choices=STATUS, default="available")
-    sequence = models.PositiveSmallIntegerField(default=1)
+    sequence = QtyField(default=1)
     active = models.BooleanField(default=True)
 
     class Meta:
@@ -276,12 +277,12 @@ class Mould(BaseRecord):
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=120)
     product_component = models.ForeignKey(ProductComponent, on_delete=models.PROTECT, related_name="moulds")
-    cavities = models.PositiveSmallIntegerField()
-    active_cavities = models.PositiveSmallIntegerField()
+    cavities = QtyField()
+    active_cavities = QtyField()
     standard_cycle_s = models.DecimalField("Standard cycle (s)", max_digits=6, decimal_places=2)
-    setup_minutes = models.PositiveIntegerField(default=60)
+    setup_minutes = QtyField(default=60)
     compatible_machines = models.ManyToManyField(Machine, blank=True, related_name="moulds")
-    min_tonnage = models.PositiveIntegerField(null=True, blank=True)
+    min_tonnage = QtyField(null=True, blank=True)
     requires_robot = models.BooleanField(default=True)
     ownership = models.CharField(max_length=20, choices=[("kantam", "Kantam"), ("customer", "Customer-owned")], default="kantam")
     shot_count = models.PositiveBigIntegerField(default=0)

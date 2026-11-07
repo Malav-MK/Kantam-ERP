@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, Department, DocumentRecord
 from apps.masters.models import Machine, Mould
 
@@ -58,7 +59,7 @@ class Task(DocumentRecord):
     due_at = models.DateTimeField("Current due")
     original_due_at = models.DateTimeField("Original due", null=True, blank=True, help_text="Set once at creation; revisions never overwrite it")
     due_revisions = models.JSONField(default=list, blank=True, help_text='[{"from","to","reason","by","at"}]')
-    expected_minutes = models.PositiveIntegerField(default=0)
+    expected_minutes = QtyField(default=0)
     state = models.CharField(max_length=12, choices=STATES, default="assigned", db_index=True)
     evidence_required = models.CharField(max_length=16, choices=EVIDENCE, default="none")
     checklist = models.JSONField(default=list, blank=True, help_text='[{"id","text","critical","kind":"yes_no|reading","limit"}] - frozen template revision')
@@ -78,7 +79,7 @@ class Task(DocumentRecord):
     verified_at = models.DateTimeField(null=True, blank=True)
     verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     review_note = models.TextField(blank=True)
-    actual_minutes = models.PositiveIntegerField(default=0)
+    actual_minutes = QtyField(default=0)
     pm_plan = models.ForeignKey("PMPlan", null=True, blank=True, on_delete=models.PROTECT, related_name="occurrences")
     occurrence_key = models.CharField(max_length=120, null=True, blank=True, unique=True, help_text="Stable key; prevents duplicate generation")
     overdue_notified = models.BooleanField(default=False)
@@ -115,8 +116,8 @@ class PMPlan(DocumentRecord):
     competence = models.CharField(max_length=120, blank=True)
     permit_required = models.BooleanField(default=False)
     evidence_required = models.CharField(max_length=16, choices=Task.EVIDENCE, default="photo_or_report")
-    expected_minutes = models.PositiveIntegerField(default=30)
-    window_hours = models.PositiveIntegerField(default=12, help_text="Planning window before due")
+    expected_minutes = QtyField(default=30)
+    window_hours = QtyField(default=12, help_text="Planning window before due")
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     next_due = models.DateTimeField()

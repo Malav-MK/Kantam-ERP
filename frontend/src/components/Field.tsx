@@ -208,8 +208,20 @@ export function FieldInput({ meta, value, onChange, values, parent, record, labe
       );
     case "textarea":
       return <textarea value={value ?? ""} onChange={(e) => onChange(e.target.value)} rows={3} disabled={disabled} required={meta.required} />;
+    case "choice_multi": {
+      const picked: string[] = Array.isArray(value) ? value : [];
+      return (
+        <div className="choice-multi" role="group" aria-label={meta.label}>
+          {meta.choices?.map((c) => (
+            <label key={c.value} className="check">
+              <input type="checkbox" checked={picked.includes(c.value)} disabled={disabled}
+                onChange={(e) => onChange(e.target.checked ? [...picked, c.value] : picked.filter((p) => p !== c.value))} /> {c.label}
+            </label>
+          ))}
+        </div>
+      );
+    }
     case "integer":
-      return <input type="number" step={1} inputMode="numeric" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} disabled={disabled} required={meta.required} />;
     case "decimal":
       return <input type="number" step="any" inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} disabled={disabled} required={meta.required} />;
     case "date":

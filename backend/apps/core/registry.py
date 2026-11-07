@@ -88,6 +88,8 @@ class Resource:
     filter_defaults = {}
     # Show a form field only when another field has a value, e.g. {"finish_other": {"finish": "other"}}.
     show_if = {}
+    # Create-only: send a list here and one record is saved per value, all or none, e.g. ["component_type"].
+    multi_create_fields = []
     # Files the create form must include, e.g. [{"purpose": "design_pdf", "label": "Designed PDF", "accept": "application/pdf"}].
     required_uploads = []
     help = {}

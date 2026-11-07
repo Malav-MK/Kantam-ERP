@@ -8,6 +8,7 @@ vehicle exit is not a stock relief.
 from django.conf import settings
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, DocumentRecord, Department
 from apps.masters.models import Customer, Supplier
 
@@ -46,7 +47,7 @@ class Visit(DocumentRecord):
     purpose = models.CharField(max_length=300)
     pre_registered = models.BooleanField(default=False)
     expected_at = models.DateTimeField(null=True, blank=True)
-    expected_minutes = models.PositiveIntegerField(default=60)
+    expected_minutes = QtyField(default=60)
     gate = models.CharField(max_length=40, default="Main gate")
     permitted_area = models.CharField(max_length=120, blank=True)
     escort_required = models.BooleanField(default=True)
@@ -131,7 +132,7 @@ class GateMaterial(DocumentRecord):
     po_reference = models.CharField(max_length=60, blank=True)
     dispatch = models.ForeignKey("fg.Dispatch", null=True, blank=True, on_delete=models.PROTECT, related_name="gate_outs")
     receiving_department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT)
-    packages = models.PositiveIntegerField(default=0)
+    packages = QtyField(default=0)
     seal_no = models.CharField(max_length=40, blank=True)
     weighbridge_ref = models.CharField(max_length=60, blank=True)
     status = models.CharField(max_length=18, choices=STATUS, default="arrived", db_index=True)
@@ -149,7 +150,7 @@ class GateMaterialLine(BaseRecord):
     declared_qty = models.DecimalField("Declared qty", max_digits=14, decimal_places=3)
     observed_qty = models.DecimalField("Gate-observed qty", max_digits=14, decimal_places=3, null=True, blank=True)
     uom = models.CharField(max_length=10)
-    packages = models.PositiveIntegerField(default=0)
+    packages = QtyField(default=0)
     visible_damage = models.CharField(max_length=200, blank=True)
 
 
@@ -182,7 +183,7 @@ class Courier(DocumentRecord):
     awb = models.CharField("AWB / tracking", max_length=60)
     sender = models.CharField(max_length=150)
     receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="couriers", help_text="Named internal receiver / sender")
-    packages = models.PositiveIntegerField(default=1)
+    packages = QtyField(default=1)
     declared_contents = models.CharField(max_length=200, blank=True)
     condition = models.CharField(max_length=120, default="Intact")
     status = models.CharField(max_length=16, choices=STATUS, db_index=True)

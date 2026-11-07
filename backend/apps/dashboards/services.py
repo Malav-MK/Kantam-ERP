@@ -136,7 +136,7 @@ def owner_overview(request, period="today"):
          "tone": "warn" if stopped else "ok", "basis": "Derived from current-shift PRs, open downtime and breakdowns; never inferred from old records.",
          "records": [{"resource": "masters.machine", "id": m["machine_id"], "label": m["machine"], "detail": f"{m['status']}: {m['reason']}"} for m in stopped]},
         {"key": "output", "label": "Planned vs good output", "value": f"{good:,} / {planned:,}",
-         "tone": "ok" if not planned or good >= planned * 0.9 else "warn",
+         "tone": "ok" if not planned or good >= planned * Decimal("0.9") else "warn",
          "basis": "Good (accepted) pieces vs planned moulded pieces of PRs reported in the period - like with like.",
          "records": [{"resource": "production.productionreport", "id": str(r.pk), "label": r.doc_no, "detail": f"{r.machine.code}: good {r.good_qty} of {r.pr.planned_pcs}"} for r in reports.select_related("machine", "pr")[:50]]},
         {"key": "rejection", "label": "Rejection %", "value": f"{calc.reject_pct(rejected, total)}%", "tone": "warn" if total and rejected / total > 0.03 else "ok",
@@ -191,7 +191,7 @@ def gate_overview(request):
             inside_people.append({"person": p.name, "code": p.person_code, "kind": p.get_kind_display(), "employer": p.employer,
                                   "since": last.at, "phone": p.phone if show_personal else None})
     visitors_inside = Visit.objects.filter(status="inside")
-    overdue_visitors = [v for v in visitors_inside if v.entry_at and now > v.entry_at + datetime.timedelta(minutes=v.expected_minutes + 30)]
+    overdue_visitors = [v for v in visitors_inside if v.entry_at and now > v.entry_at + datetime.timedelta(minutes=float(v.expected_minutes) + 30)]
     return {
         "generated_at": now,
         "freshness_note": "Last confirmed gate events - supports emergency procedures, not a guaranteed physical headcount.",

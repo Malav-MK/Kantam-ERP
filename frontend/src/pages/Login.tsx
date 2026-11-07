@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { FieldLabel } from "../components/ui";
 import { api, ApiError, get } from "../api";
 import { useAuth } from "../auth";
 import KantamLogo from "../components/KantamLogo";
@@ -82,7 +83,7 @@ export default function Login() {
           <form onSubmit={enrol} className="stack">
             <h2>Enrol this device</h2>
             <p className="muted small">Every PC, tablet and gate device is enrolled once by IT before anyone can sign in on it. Enter the one-time code shown to the administrator.</p>
-            <label className="field"><span>Enrolment code</span>
+            <label className="field"><FieldLabel label="Enrolment code" help="The one-time code from your administrator. E.g. TCPM-H35T-4UWY. It works once and only on the device you enter it on." />
               <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="XXXX-XXXX-XXXX" autoFocus required /></label>
             <button className="btn primary" disabled={busy}>Enrol device</button>
           </form>
@@ -92,9 +93,9 @@ export default function Login() {
           <form onSubmit={login} className="stack">
             <h2>Sign in</h2>
             {device && <p className="muted small">Device: <b>{device.name}</b></p>}
-            <label className="field"><span>Username</span>
+            <label className="field"><FieldLabel label="Username" help="Your personal sign-in name, usually in lower case. E.g. ramesh.patel." />
               <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required /></label>
-            <label className="field"><span>Password</span>
+            <label className="field"><FieldLabel label="Password" help="Your own password. It is case-sensitive. Ask IT to reset it if you have forgotten it." />
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>
             <button className="btn primary" disabled={busy}>Sign in</button>
           </form>
@@ -106,7 +107,7 @@ export default function Login() {
             <p className="muted small">Your role requires an authenticator app (Google Authenticator, Microsoft Authenticator…). Add this key, then enter the 6-digit code.</p>
             <code className="secret">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
             <details className="small"><summary>Setup link</summary><code className="wrap">{setup.otpauth_uri}</code></details>
-            <label className="field"><span>6-digit code</span>
+            <label className="field"><FieldLabel label="6-digit code" help="The 6 digits shown in your authenticator app for Kantam ERP right now. E.g. 482913. The code changes every 30 seconds." />
               <input inputMode="numeric" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} autoFocus required /></label>
             <button className="btn primary" disabled={busy}>Verify and continue</button>
           </form>
@@ -115,7 +116,7 @@ export default function Login() {
         {step === "mfa" && (
           <form onSubmit={verify} className="stack">
             <h2>Two-step verification</h2>
-            <label className="field"><span>Code from your authenticator app</span>
+            <label className="field"><FieldLabel label="Code from your authenticator app" help="The 6 digits shown in your authenticator app for Kantam ERP right now. E.g. 482913. The code changes every 30 seconds." />
               <input inputMode="numeric" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} autoFocus required /></label>
             <button className="btn primary" disabled={busy}>Verify</button>
           </form>

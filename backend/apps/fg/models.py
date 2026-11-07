@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, DocumentRecord
 from apps.masters.models import Customer, Location, Product
 
@@ -12,13 +13,13 @@ class PackingRecord(DocumentRecord):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     so_line = models.ForeignKey("sales.SOLine", null=True, blank=True, on_delete=models.PROTECT, related_name="packings")
     flavour = models.CharField(max_length=80, blank=True)
-    sets_packed = models.PositiveIntegerField()
+    sets_packed = QtyField()
     packed_lot = models.ForeignKey("inventory.Lot", null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     location = models.ForeignKey(Location, on_delete=models.PROTECT)
-    pcs_per_carton = models.PositiveIntegerField(default=0)
-    cartons = models.PositiveIntegerField(default=0)
-    partial_carton_pcs = models.PositiveIntegerField(default=0)
-    bags = models.PositiveIntegerField(default=0)
+    pcs_per_carton = QtyField(default=0)
+    cartons = QtyField(default=0)
+    partial_carton_pcs = QtyField(default=0)
+    bags = QtyField(default=0)
     packer_name = models.CharField(max_length=120, blank=True)
     consumption = models.JSONField(default=list, help_text="Component lots consumed [{lot, qty, component}]")
     status = models.CharField(max_length=10, choices=STATUS, default="posted")
@@ -54,8 +55,8 @@ class DispatchLine(BaseRecord):
     dispatch = models.ForeignKey(Dispatch, on_delete=models.PROTECT, related_name="lines")
     so_line = models.ForeignKey("sales.SOLine", on_delete=models.PROTECT, related_name="dispatch_lines")
     lot = models.ForeignKey("inventory.Lot", on_delete=models.PROTECT, related_name="dispatch_lines")
-    qty = models.PositiveIntegerField()
-    cartons = models.PositiveIntegerField(default=0)
+    qty = QtyField()
+    cartons = QtyField(default=0)
 
 
 class DeliveryException(BaseRecord):
@@ -63,7 +64,7 @@ class DeliveryException(BaseRecord):
     ACTIONS = [("replacement", "Replacement"), ("credit_note", "Credit note"), ("return", "Return to plant"), ("none", "No action")]
     dispatch = models.ForeignKey(Dispatch, on_delete=models.PROTECT, related_name="exceptions")
     kind = models.CharField(max_length=12, choices=KINDS)
-    qty = models.PositiveIntegerField()
+    qty = QtyField()
     description = models.TextField()
     action = models.CharField(max_length=12, choices=ACTIONS, default="none")
     status = models.CharField(max_length=10, choices=[("open", "Open"), ("resolved", "Resolved")], default="open")

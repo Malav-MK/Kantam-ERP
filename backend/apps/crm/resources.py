@@ -235,8 +235,8 @@ class QuotationResource(Resource):
         obj.snapshot = {
             "header": {k: audit._jsonable(getattr(obj, k)) for k in ["doc_no", "revision", "valid_until", "price_basis", "gst_rate_pct", "payment_terms", "freight_basis",
                                                                      "block_charges", "delivery_lead_days"]},
-            "lines": [{"product": l.product.code, "scope": l.scope, "flavour": l.flavour, "qty_from": l.qty_from, "qty": l.qty,
-                       "unit_price": str(l.unit_price), "moq": l.moq, "specification": l.specification} for l in obj.lines.all()],
+            "lines": audit._jsonable([{"product": l.product.code, "scope": l.scope, "flavour": l.flavour, "qty_from": l.qty_from, "qty": l.qty,
+                       "unit_price": str(l.unit_price), "moq": l.moq, "specification": l.specification} for l in obj.lines.all()]),
         }
         obj.row_version += 1
         obj.save()

@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, get } from "../api";
 import { useAuth } from "../auth";
-import { Empty, ErrorBox, Modal, Pill, Stat } from "../components/ui";
+import { Empty, ErrorBox, Modal, Pill, Stat, FieldLabel } from "../components/ui";
 import { fmtDate, fmtDateTime } from "../format";
 import KantamLogo from "../components/KantamLogo";
 import Icon from "../components/Icon";
@@ -257,15 +257,15 @@ function ScheduleDialog({ machine, onClose, onDone }: { machine: any; onClose: (
     <Modal title={`Schedule on ${machine.machine}`} onClose={onClose}>
       <form className="form-grid" onSubmit={submit}>
         <label className="field"><span>Day</span><input value={day} disabled /></label>
-        <label className="field"><span>Date</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
+        <label className="field"><FieldLabel label="Date" help="Date the shift starts. A night shift keeps its starting date." /><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
         <label className="field"><span>Machine No.</span><input value={machine.machine} disabled /></label>
-        <label className="field"><span>Shift</span><select value={shift} onChange={(e) => setShift(e.target.value)}><option value="day">Day 09:00-21:00</option><option value="night">Night 21:00-09:00</option></select></label>
-        <label className="field span2"><span>Select plan</span>
+        <label className="field"><FieldLabel label="Shift" help="Day runs 09:00-21:00 and Night runs 21:00-09:00." /><select value={shift} onChange={(e) => setShift(e.target.value)}><option value="day">Day 09:00-21:00</option><option value="night">Night 21:00-09:00</option></select></label>
+        <label className="field span2"><FieldLabel label="Select plan" help="The plan line to run on this machine. Plans marked AT RISK may miss their date." />
           <select value={plan} onChange={(e) => setPlan(e.target.value)} required>
             <option value="">— eligible plans on this machine —</option>
             {machine.eligible_plans.map((p: any) => <option key={p.id} value={p.id}>{p.label} · {p.planned_qty} good · {p.cavities} cav @ {p.cycle_s}s{p.at_risk ? " · AT RISK" : ""}</option>)}
           </select></label>
-        <label className="field"><span>Planned moulded pcs (optional)</span><input type="number" value={pcs} onChange={(e) => setPcs(e.target.value)} /></label>
+        <label className="field"><FieldLabel label="Planned moulded pcs (optional)" help="Pieces to mould in this shift. Leave empty to use what fits. E.g. 12000. Decimals are allowed." /><input type="number" step="any" value={pcs} onChange={(e) => setPcs(e.target.value)} /></label>
         <ErrorBox error={error} />
         <div className="form-actions span2"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary">Create draft PR</button></div>
       </form>

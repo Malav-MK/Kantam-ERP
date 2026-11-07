@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import { api, ApiError, newIdempotencyKey } from "../api";
 import type { ActionMeta, FieldMeta, ResourceMeta, Row } from "../types";
 import { FieldInput } from "./Field";
-import { ErrorBox, Modal } from "./ui";
+import { ErrorBox, FieldLabel, Modal } from "./ui";
 
 function errorText(e: unknown) {
   if (!(e instanceof ApiError)) return String(e);
@@ -43,6 +43,11 @@ export function RecordForm({ meta, record, defaults, initial, parent, onSaved, o
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
+    const empty = creating ? names.find((n) => meta.fields[n]?.multi_on_create && !values[n]?.length) : undefined;
+    if (empty) {
+      setError(`Select at least one: ${meta.fields[empty].label}.`);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -88,28 +93,32 @@ export function RecordForm({ meta, record, defaults, initial, parent, onSaved, o
     <form onSubmit={submit} className="form-grid">
       {names.filter((n) => !hidden.has(n) && visible(n)).map((n) => {
         const f: FieldMeta = meta.fields[n] ?? { name: n, label: n, type: "text" };
+        // Several tick boxes need a plain wrapper: an outer <label> would also toggle the first of them.
+        const multi = creating && f.multi_on_create;
+        const Wrap = multi ? "div" : "label";
+        const input = (
+          <FieldInput meta={multi ? { ...f, type: "choice_multi" } : f} value={values[n]} values={values} parent={parent} labelValue={labels[n]}
+            onLabel={(l) => setLabels((s) => ({ ...s, [n]: l }))}
+            onChange={(v) => setValues((s) => ({ ...s, [n]: v }))} />
+        );
         return (
-          <label key={n} className={`field ${f.type === "textarea" || f.type === "json" ? "span2" : ""}`}>
-            {f.type !== "boolean" && <span>{f.label}{f.required && <b className="req">*</b>}</span>}
-            <FieldInput meta={f} value={values[n]} values={values} parent={parent} labelValue={labels[n]}
-              onLabel={(l) => setLabels((s) => ({ ...s, [n]: l }))}
-              onChange={(v) => setValues((s) => ({ ...s, [n]: v }))} />
-            {f.help && <small className="muted">{f.help}</small>}
-          </label>
+          <Wrap key={n} className={`field ${f.type === "textarea" || f.type === "json" || multi ? "span2" : ""}`}>
+            {f.type === "boolean" ? <div className="check-row">{input}<FieldLabel label="" name={f.label} help={f.help} /></div>
+              : <><FieldLabel label={f.label} required={f.required} help={f.help} />{input}</>}
+          </Wrap>
         );
       })}
       {uploads.map((u) => (
         <label key={u.purpose} className="field">
-          <span>{u.label}<b className="req">*</b></span>
+          <FieldLabel label={u.label} required help={u.accept.includes("pdf") ? "Attach the final PDF file. E.g. the designer's approved artwork." : "Attach a clear JPEG or PNG photo."} />
           <input type="file" accept={u.accept} required onChange={(e) => {
             const file = e.target.files?.[0];
             setFiles((s) => { const next = { ...s }; if (file) next[u.purpose] = file; else delete next[u.purpose]; return next; });
           }} />
-          <small className="muted">{u.accept.includes("pdf") ? "PDF file" : "Photo (JPEG or PNG)"}</small>
         </label>
       ))}
       {!creating && (
-        <label className="field span2"><span>Reason for change (recorded in history)</span>
+        <label className="field span2"><FieldLabel label="Reason for change (recorded in history)" help="Say why you are changing this. E.g. Customer moved the delivery date. Optional, but it helps anyone reading the history later." />
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Optional" /></label>
       )}
       <ErrorBox error={error} />
@@ -174,16 +183,21 @@ export function ActionDialog({ meta, action, record, onDone, onClose }: {
       ) : (
         <form onSubmit={submit} className="form-grid">
           {action.confirm && <div className="alert warn span2">{action.confirm}</div>}
-          {fields.map((f) => (
-            <label key={f.name} className={`field ${["textarea", "checklist", "multiselect"].includes(f.type) ? "span2" : ""}`}>
-              {f.type !== "boolean" && <span>{f.label}{f.required && <b className="req">*</b>}</span>}
+          {fields.map((f) => {
+            const input = (
               <FieldInput meta={{ ...f, label: f.label }} value={values[f.name]} values={values} record={record} labelValue={labels[f.name]}
                 onLabel={(l) => setLabels((s) => ({ ...s, [f.name]: l }))}
                 onChange={(v) => setValues((s) => ({ ...s, [f.name]: v }))} />
-            </label>
-          ))}
+            );
+            return (
+              <label key={f.name} className={`field ${["textarea", "checklist", "multiselect"].includes(f.type) ? "span2" : ""}`}>
+                {f.type === "boolean" ? <div className="check-row">{input}<FieldLabel label="" name={f.label} help={f.help} /></div>
+                  : <><FieldLabel label={f.label} required={f.required} help={f.help} />{input}</>}
+              </label>
+            );
+          })}
           {action.reason_required && (
-            <label className="field span2"><span>Reason<b className="req">*</b></span>
+            <label className="field span2"><FieldLabel label="Reason" required help="Why you are doing this, in at least 5 characters. E.g. Damaged in transit, supplier informed. It is saved in the audit history." />
               <textarea rows={2} required minLength={5} value={values.reason ?? ""} onChange={(e) => setValues((s) => ({ ...s, reason: e.target.value }))} /></label>
           )}
           {!fields.length && !action.reason_required && !action.confirm && <p className="muted span2">Confirm: {action.label}?</p>}
@@ -225,7 +239,7 @@ export function DeleteDialog({ meta, record, onClose, onDeleted }: { meta: Resou
         <p>Permanently delete <b>{name}</b>?{meta.inlines.length > 0 && " Lines that belong only to it (such as order lines) are deleted with it."}</p>
         <p className="small muted">This cannot be undone. The deletion and a copy of the record are kept in the audit log.
           If other records still use it, nothing is deleted and you will be told what uses it.</p>
-        <label className="field"><span>Reason<b className="req">*</b></span>
+        <label className="field"><FieldLabel label="Reason" required help="Why this record is being deleted, in at least 5 characters. E.g. Entered by mistake, duplicate of M02." />
           <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Entered by mistake" /></label>
         <ErrorBox error={error} />
         <div className="row gap">

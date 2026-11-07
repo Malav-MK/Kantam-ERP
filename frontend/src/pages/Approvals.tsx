@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, get, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
-import { Empty, ErrorBox, Pill } from "../components/ui";
+import { Empty, ErrorBox, Pill, FieldLabel } from "../components/ui";
 import { fmtDateTime } from "../format";
 
 type Approval = {
@@ -143,7 +143,7 @@ export function ApprovalDetail() {
       <ErrorBox error={error} />
       {x.you_can_decide && (
         <form className="card stack" onSubmit={decide("approve")}>
-          <label className="field"><span>Your note (required to reject)</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          <label className="field"><FieldLabel label="Your note (required to reject)" help="Your decision comment. E.g. Checked against the signed PO. To reject, explain why in at least 5 characters." /><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
           <div className="row gap">
             <button className="btn primary" disabled={busy}><Icon name="check" size={16} />Approve{a.required_approvals > 1 ? ` (${(a.approvals?.length ?? 0) + 1}/${a.required_approvals})` : ""}</button>
             <button type="button" className="btn danger" disabled={busy || note.trim().length < 5} onClick={decide("reject")}><Icon name="close" size={16} />Reject</button>
@@ -153,7 +153,7 @@ export function ApprovalDetail() {
       {x.you_are_maker && a.status === "pending" && (
         <form className="card stack" onSubmit={decide("withdraw")}>
           <p className="small muted">You raised this request, so you cannot approve it. You can withdraw it.</p>
-          <label className="field"><span>Reason for withdrawal</span><input value={note} onChange={(e) => setNote(e.target.value)} required minLength={5} /></label>
+          <label className="field"><FieldLabel label="Reason for withdrawal" help="Why this request is no longer needed, in at least 5 characters. E.g. Customer cancelled the change." /><input value={note} onChange={(e) => setNote(e.target.value)} required minLength={5} /></label>
           <div><button className="btn" disabled={busy}>Withdraw request</button></div>
         </form>
       )}

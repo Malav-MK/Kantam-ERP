@@ -205,6 +205,12 @@ dl.kv > div { display: flex; gap: 8px; } dl.kv dt { color: var(--muted); min-wid
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .field > span { font-weight: 600; }
 .req { color: var(--danger); margin-left: 2px; }
+.help-tip { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 6px; padding: 0; border: 1px solid var(--muted);
+  border-radius: 50%; background: none; color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; vertical-align: text-bottom; }
+.help-tip:hover, .help-tip[aria-expanded="true"] { border-color: var(--brand); color: var(--brand); }
+.field-help { display: block; flex-basis: 100%; font-weight: 400; color: var(--muted); }
+.check-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.choice-multi { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 6px 0; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .check input { width: auto; min-height: auto; }

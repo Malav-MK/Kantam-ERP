@@ -49,7 +49,7 @@ def gate_reminders(now=None):
     now = now or timezone.now()
     n = 0
     for v in Visit.objects.filter(status="inside"):
-        if v.entry_at and now > v.entry_at + datetime.timedelta(minutes=v.expected_minutes + 30):
+        if v.entry_at and now > v.entry_at + datetime.timedelta(minutes=float(v.expected_minutes) + 30):
             n += notify_perm("dashboard.gate.view", f"Overdue visitor: {v.visitor_name} (host {v.host.full_name})", severity="warning",
                              resource="gate.visit", object_id=v.pk, dedupe_key=f"visit-overdue:{v.pk}")
     for p in GatePass.objects.filter(returnable=True, status__in=["out", "partial"], due_back__lt=timezone.localdate()):

@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from apps.core.fields import parse_qty
 from apps.core import audit, calc
 from apps.core.api import BusinessRuleError
 from apps.core.services import notify, notify_perm
@@ -77,7 +78,7 @@ def reforecast_machine(machine, notify_changes=True):
     for line in PlanLine.objects.filter(machine=machine, status__in=ACTIVE_LINE_STATES).select_related("demand__so_line__so").order_by("sequence", "created_at"):
         start = max(cursor, line.earliest_start) if line.earliest_start else cursor
         if line.status == "planned":
-            start += datetime.timedelta(minutes=line.setup_minutes)
+            start += datetime.timedelta(minutes=float(line.setup_minutes))
         m = line_metrics(line)
         finish = _skip_holidays(start, m["remaining_run_hours"])
         old_finish = line.forecast_finish
@@ -164,7 +165,7 @@ def approve_plan(plan, user):
             line.baseline_cycle_s = line.cycle_s
             line.baseline_finish = line.forecast_finish
             line.save(update_fields=["baseline_qty", "baseline_cycle_s", "baseline_finish", "updated_at"])
-        snap.append({"line": str(line.pk), "machine": line.machine.code, "component": str(line.component), "qty": line.baseline_qty,
+        snap.append({"line": str(line.pk), "machine": line.machine.code, "component": str(line.component), "qty": audit._jsonable(line.baseline_qty),
                      "cycle_s": str(line.baseline_cycle_s), "finish": audit._jsonable(line.baseline_finish)})
     if plan.status == "draft":
         plan.baseline = {"approved_at": timezone.now().isoformat(), "lines": snap}
@@ -272,7 +273,7 @@ def create_pr(*, line, shift_date, shift, user, start=None, end=None, planned_pc
     hours = Decimal(str((end - start).total_seconds() / 3600))
     capacity = calc.planned_moulded_pieces(hours, line.active_cavities, line.cycle_s)
     m = line_metrics(line)
-    planned_pcs = int(planned_pcs) if planned_pcs else min(capacity, m["gross_remaining"]) or capacity
+    planned_pcs = parse_qty(planned_pcs) if planned_pcs else min(capacity, m["gross_remaining"]) or capacity
     if planned_pcs > capacity:
         raise BusinessRuleError(f"Planned {planned_pcs} pcs exceeds segment capacity {capacity} pcs.", "over_capacity")
     recipe = active_recipe(line.component, shift_date)
@@ -292,7 +293,7 @@ def create_pr(*, line, shift_date, shift, user, start=None, end=None, planned_pc
             continue
         PRMaterial.objects.create(pr=pr, item=row["item"], kind=row["kind"], artwork=row.get("artwork"), required_qty=row["qty"], uom=row["uom"],
                                   basis=audit._jsonable(row["basis"]), created_by=user)
-    pr.readiness = line_readiness(line)
+    pr.readiness = audit._jsonable(line_readiness(line))
     pr.save(update_fields=["readiness"])
     audit.record("pr_created", "planning.productionrequest", pr, changes={"planned_pcs": planned_pcs, "capacity": capacity})
     return pr
@@ -313,7 +314,7 @@ def release_pr(pr, user):
     if shortages:
         ready["blockers"].append("Material shortage")
     if ready["blockers"]:
-        pr.readiness = {**ready, "shortages": shortages}
+        pr.readiness = audit._jsonable({**ready, "shortages": shortages})
         pr.save(update_fields=["readiness"])
         if shortages:
             notify_perm("purchase.requisition.create", f"Shortage blocks {pr.doc_no}", body=str(shortages), severity="critical",
@@ -323,18 +324,18 @@ def release_pr(pr, user):
     for mat in pr.materials.select_related("item"):
         reserve(item=mat.item, qty=mat.required_qty, user=user, pr=pr, note=f"Shift requirement {pr.doc_no}")
     recipe = pr.recipe
-    pr.snapshot = {
+    pr.snapshot = audit._jsonable({
         "recipe": {"id": str(recipe.pk), "revision": recipe.revision, "basis": recipe.basis,
                    "lines": [{"item": l.item.code, "percent": str(l.percent), "mb": l.is_masterbatch} for l in recipe.lines.all()]} if recipe else None,
         "artwork": {"id": str(pr.artwork.pk), "code": pr.artwork.code, "revision": pr.artwork.revision, "flavour": pr.artwork.flavour} if pr.artwork else None,
         "so_line": str(pr.so_line) if pr.so_line else None,
         "component_weight_g": str(pr.component.weight_g),
         "cavities": pr.active_cavities, "cycle_s": str(pr.cycle_s),
-    }
+    })
     pr.status = "released"
     pr.released_by = user
     pr.released_at = timezone.now()
-    pr.readiness = ready
+    pr.readiness = audit._jsonable(ready)
     pr.row_version += 1
     pr.save()
     line = pr.plan_line

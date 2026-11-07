@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 import { toneFor } from "../format";
 
@@ -34,6 +34,22 @@ export function Empty({ children }: { children: ReactNode }) {
 
 export function ErrorBox({ error }: { error?: string }) {
   return error ? <div className="alert danger" role="alert">{error}</div> : null;
+}
+
+/** A field's label with its "?" reference: what to enter and an example. Opens in place so it is never clipped by a dialog. */
+export function FieldLabel({ label, name, required, help }: { label: string; name?: string; required?: boolean; help?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <span className="field-label">{label}{required && <b className="req">*</b>}
+        {help && (
+          <button type="button" className="help-tip" aria-label={`What to enter for ${label || name}`} aria-expanded={open} title={help}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}>?</button>
+        )}
+      </span>
+      {open && <small className="field-help">{help}</small>}
+    </>
+  );
 }
 
 export function Help({ help }: { help?: { why?: string; steps?: string; effect?: string; boundary?: string } }) {

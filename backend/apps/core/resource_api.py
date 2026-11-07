@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from . import audit, maker_checker
 from .api import BusinessRuleError, VersionConflict, idempotent
+from .field_guide import field_guide
 from .models import AuditLog
 from .rbac import can_delete_records, effective_permissions, has_perm
 from .registry import MODULES, REGISTRY, resource_for_model
@@ -89,6 +90,10 @@ def field_meta(res, name, user, writable=False):
         meta["help"] = str(f.help_text)
     if name in res.field_help:
         meta["help"] = res.field_help[name]
+    if writable:
+        meta["help"] = field_guide(res.key, name, meta["type"], meta.get("help", ""))
+    if name in res.multi_create_fields:
+        meta["multi_on_create"] = True
     if name in res.depends:
         meta["depends"] = res.depends[name]
     if name in res.filter_defaults:
@@ -125,7 +130,8 @@ def resource_meta(res, user):
         "can_delete": can_delete(res, user),
         "actions": [
             {
-                "name": a.name, "label": a.label, "fields": a.fields, "reason_required": a.reason_required,
+                "name": a.name, "label": a.label, "reason_required": a.reason_required,
+                "fields": [{**f, "help": field_guide(res.key, f["name"], f.get("type", "text"), f.get("help", ""))} for f in a.fields],
                 "confirm": a.confirm, "tone": a.tone, "detail": a.detail,
             }
             for a in res.actions if a.perm(res.key) in perms
@@ -256,6 +262,24 @@ def perform_create(request, res, raw):
     audit.record("create", res.key, obj, changes=snap)
     res.after_create(request, obj)
     return obj, snap
+
+
+def perform_create_many(request, res, raw):
+    """One record normally; one per selected value when a multi_create_fields value is a list."""
+    name = next((n for n in res.multi_create_fields if isinstance(raw.get(n), list)), None)
+    if name is None:
+        return [perform_create(request, res, raw)[0]]
+    values = list(dict.fromkeys(raw[name]))
+    if not values:
+        raise BusinessRuleError(f"Select at least one {model_field(res, name).verbose_name}.", "validation")
+    objs = []
+    for value in values:
+        try:
+            objs.append(perform_create(request, res, {**raw, name: value})[0])
+        except serializers.ValidationError as e:
+            label = dict(model_field(res, name).choices or []).get(value, value)
+            raise BusinessRuleError(f"{label}: nothing was saved. This entry is invalid or already exists.", "validation", e.detail)
+    return objs
 
 
 def store_required_uploads(request, res, obj):
@@ -475,10 +499,12 @@ class ResourceListView(ResourceBase):
         if missing:
             raise BusinessRuleError(f"Attach: {', '.join(missing)}.", "upload_required", {"missing": missing})
         with transaction.atomic():
-            obj, _ = perform_create(request, res, raw)
+            objs = perform_create_many(request, res, raw)
+            obj = objs[0]
             store_required_uploads(request, res, obj)
         payload = serialize(res, request, obj)
         payload["_extra"] = res.extra_detail(request, obj)
+        payload["_created_count"] = len(objs)
         return Response(payload, status=201)
 
 

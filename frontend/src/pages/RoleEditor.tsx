@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, get, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
-import { ErrorBox } from "../components/ui";
+import { ErrorBox, FieldLabel } from "../components/ui";
 
 type Perm = { code: string; description: string };
 type Row = { key: string; label: string; cells: Record<string, Perm[]> };
@@ -167,9 +167,9 @@ export function RoleEditor() {
       ) : (
         <div className="card stack">
           <div className="form-grid">
-            <label className="field"><span>Role name</span><input value={details.name} onChange={(e) => setDetails({ ...details, name: e.target.value })} required /></label>
-            <label className="field"><span>Description</span><input value={details.description} onChange={(e) => setDetails({ ...details, description: e.target.value })} /></label>
-            <label className="field span2"><span>Reason for this change (recorded in history)<b className="req">*</b></span>
+            <label className="field"><FieldLabel label="Role name" help="Role name as people know it. E.g. Stores staff." /><input value={details.name} onChange={(e) => setDetails({ ...details, name: e.target.value })} required /></label>
+            <label className="field"><FieldLabel label="Description" help="One line on what this role does. E.g. Receives and issues raw material." /><input value={details.description} onChange={(e) => setDetails({ ...details, description: e.target.value })} /></label>
+            <label className="field span2"><FieldLabel label="Reason for this change (recorded in history)" required help="Why this role is changing. E.g. Stores staff now also record physical counts." />
               <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Stores staff now also record physical counts" /></label>
             {canDelete && role._extra.users > 0 && (
               <p className="small muted span2">{role._extra.users} user(s) hold this role. Revoke it from them (Administration → Users → Revoke role) before deleting it.</p>

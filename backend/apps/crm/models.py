@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, DocumentRecord
 from apps.masters.models import Artwork, Customer, Product
 
@@ -24,7 +25,7 @@ class Lead(DocumentRecord):
     contact_name = models.CharField(max_length=120, blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
     potential_products = models.CharField(max_length=300, blank=True)
-    potential_qty_per_month = models.PositiveIntegerField(default=0)
+    potential_qty_per_month = QtyField(default=0)
     buying_frequency = models.CharField(max_length=40, blank=True)
     expected_buy_date = models.DateField(null=True, blank=True)
     salesperson = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
@@ -61,7 +62,7 @@ class Sample(DocumentRecord):
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.PROTECT, related_name="samples")
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     artwork = models.ForeignKey(Artwork, null=True, blank=True, on_delete=models.PROTECT)
-    qty = models.PositiveIntegerField()
+    qty = QtyField()
     sent_date = models.DateField(null=True, blank=True)
     shipment_ref = models.CharField(max_length=80, blank=True)
     received_by_customer = models.DateField(null=True, blank=True)
@@ -87,7 +88,7 @@ class Quotation(DocumentRecord):
     price_basis = models.CharField("Price basis", max_length=8, choices=PRICE_BASIS, default="excl_gst")
     gst_rate_pct = models.DecimalField("GST rate %", max_digits=5, decimal_places=2, default=18)
     block_charges = models.DecimalField("Design / block charges", max_digits=12, decimal_places=2, default=0)
-    delivery_lead_days = models.PositiveIntegerField(default=21)
+    delivery_lead_days = QtyField(default=21)
     min_margin_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     sent_at = models.DateTimeField(null=True, blank=True)
@@ -102,8 +103,8 @@ class QuotationLine(BaseRecord):
     scope = models.CharField(max_length=10, choices=SCOPES, default="set")
     flavour = models.CharField(max_length=80, blank=True)
     specification = models.CharField(max_length=300, blank=True)
-    qty_from = models.PositiveIntegerField("Quantity slab from", default=0)
-    qty = models.PositiveIntegerField()
+    qty_from = QtyField("Quantity slab from", default=0)
+    qty = QtyField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
-    moq = models.PositiveIntegerField("MOQ", default=0)
+    moq = QtyField("MOQ", default=0)
     estimated_cost = models.DecimalField(max_digits=12, decimal_places=4, default=0)

@@ -13,6 +13,7 @@ from decimal import Decimal
 from django.db.models import Sum
 from django.utils import timezone
 
+from apps.core.fields import parse_qty
 from apps.core import audit, calc
 from apps.core.api import BusinessRuleError
 from apps.core.services import draft_outbox, notify_perm
@@ -75,7 +76,7 @@ def _take_from_lots(item, product, flavour, qty, so_line, user, ref):
 def pack_sets(*, product, sets, location, user, flavour="", so_line=None, packer_name="", packing_rule=None):
     if not product.set_item_id:
         raise BusinessRuleError("Product has no packed-set FG item configured.", "set_item_missing")
-    sets = int(sets)
+    sets = parse_qty(sets)
     if sets <= 0:
         raise BusinessRuleError("Sets must be positive.", "invalid_qty")
     if so_line is not None:

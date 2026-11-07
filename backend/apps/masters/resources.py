@@ -176,6 +176,7 @@ class ProductComponentResource(MasterResource):
     list_fields = ["product", "component_type", "item", "qty_per_set", "weight_g", "iml", "labels_per_piece", "procured"]
     form_fields = ["product", "component_type", "item", "qty_per_set", "weight_g", "iml", "labels_per_piece", "procured"]
     filter_fields = ["product", "component_type"]
+    multi_create_fields = ["component_type"]
     search_fields = ["product__code", "product__name", "item__code", "item__name"]
     help = {"why": "What a product is made of: container, lid, handle ... each with its moulded item and weight.",
             "steps": "Add one row per component, or open the product and use its Components tab."}

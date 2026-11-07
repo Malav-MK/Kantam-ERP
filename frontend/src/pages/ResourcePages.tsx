@@ -153,6 +153,7 @@ export function ResourceList() {
         <Modal title={`New ${meta.singular.toLowerCase()}`} onClose={() => setCreating(false)} wide>
           <RecordForm meta={meta} onCancel={() => setCreating(false)} onSaved={(r) => {
             setCreating(false);
+            if (r._created_count > 1) { window.alert(`${r._created_count} ${meta.label.toLowerCase()} created.`); load(); return; }
             if (r._extra?.enrollment_code) window.alert(`One-time enrolment code (no time limit, shown once): ${r._extra.enrollment_code}`);
             nav(`/r/${key}/${r.id}`);
           }} />

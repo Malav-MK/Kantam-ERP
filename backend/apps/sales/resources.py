@@ -1,6 +1,7 @@
 from django.db.models import Max
 from django.utils import timezone
 
+from apps.core.fields import parse_qty
 from apps.core import audit
 from apps.core.api import BusinessRuleError
 from apps.core.rbac import has_perm, role_levels
@@ -208,7 +209,7 @@ class SOLineResource(Resource):
         if not changes:
             raise BusinessRuleError("Enter at least one new value.", "validation")
         if "qty" in changes:
-            changes["qty"] = int(changes["qty"])
+            changes["qty"] = parse_qty(changes["qty"])
         approval = services.request_line_amendment(obj, changes, data["reason"], request.user)
         if approval.status == "approved":
             return {"ok": True, "approval": str(approval.pk), "message": "Amendment applied (owner approval) and a new order version recorded."}

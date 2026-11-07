@@ -4,7 +4,7 @@ export type FieldMeta = {
   name: string;
   label: string;
   type: "text" | "textarea" | "email" | "integer" | "decimal" | "boolean" | "date" | "datetime" | "time" | "json" | "choice" | "fk" | "computed"
-    | "password" | "lookup" | "multiselect" | "checklist" | "fk_multi";
+    | "password" | "lookup" | "multiselect" | "checklist" | "fk_multi" | "choice_multi";
   readonly?: boolean;
   required?: boolean;
   choices?: Choice[];
@@ -16,6 +16,8 @@ export type FieldMeta = {
   decimals?: number;
   /** Dropdown filter preselected for this field; the user can change it. */
   filter_default?: Record<string, string>;
+  /** The create form lets the user pick several values; one record is saved per value. */
+  multi_on_create?: boolean;
   /** Only shown (and then required) when another field has this value. */
   show_if?: Record<string, string>;
 };

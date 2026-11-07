@@ -11,6 +11,7 @@ from decimal import Decimal
 from django.db.models import Max
 from django.utils import timezone
 
+from apps.core.fields import parse_qty
 from apps.core import audit
 from apps.core.api import BusinessRuleError
 from apps.core.attachments import attachments_for
@@ -145,7 +146,7 @@ class VisitResource(GateResource):
         obj.exit_at = timezone.now()
         obj.exit_guard = request.user
         obj.badge_returned = bool(data.get("badge_returned"))
-        if obj.entry_at and obj.exit_at - obj.entry_at > datetime.timedelta(minutes=obj.expected_minutes + 30):
+        if obj.entry_at and obj.exit_at - obj.entry_at > datetime.timedelta(minutes=float(obj.expected_minutes) + 30):
             obj.late_stay_reason = data.get("late_stay_reason", obj.late_stay_reason)
         obj.row_version += 1
         obj.save()
@@ -369,7 +370,7 @@ class GateMaterialResource(GateResource):
             raise BusinessRuleError("An unauthorised load cannot be cleared by a guard.", "unauthorised_load")
         require_photo(obj, "challan", "Challan")
         require_photo(obj, "load", "Load")
-        counted = int(data.get("packages_counted") or 0)
+        counted = parse_qty(data.get("packages_counted") or 0)
         if counted != obj.packages:
             obj.status = "discrepancy"
             obj.remarks = (obj.remarks + f"\nGuard counted {counted} packages vs {obj.packages} authorised").strip()

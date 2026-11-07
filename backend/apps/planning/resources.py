@@ -3,6 +3,7 @@ import datetime
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
+from apps.core.fields import parse_qty
 from apps.core import audit
 from apps.core.api import BusinessRuleError
 from apps.core.registry import Action, Resource, register
@@ -122,7 +123,7 @@ class PlanLineResource(Resource):
 
     def after_create(self, request, obj):
         services.reforecast_machine(obj.machine)
-        obj.readiness = services.line_readiness(obj)
+        obj.readiness = audit._jsonable(services.line_readiness(obj))
         obj.save(update_fields=["readiness"])
 
     def edit_block_reason(self, request, obj):
@@ -143,7 +144,7 @@ class PlanLineResource(Resource):
         changes = {}
         for f in ("planned_qty", "active_cavities", "sequence", "setup_minutes"):
             if data.get(f) not in (None, ""):
-                changes[f] = int(data[f])
+                changes[f] = parse_qty(data[f])
         for f in ("cycle_s", "expected_yield_pct"):
             if data.get(f) not in (None, ""):
                 changes[f] = data[f]

@@ -1,5 +1,6 @@
 from django.utils import timezone
 
+from apps.core.fields import parse_qty
 from apps.core import audit
 from apps.core.api import BusinessRuleError
 from apps.core.registry import Action, Resource, register
@@ -137,7 +138,7 @@ class DispatchResource(Resource):
         return obj
 
     def _exception(request, obj, data):
-        exc = DeliveryException.objects.create(dispatch=obj, kind=data["kind"], qty=int(data.get("qty") or 0), description=data.get("description", ""),
+        exc = DeliveryException.objects.create(dispatch=obj, kind=data["kind"], qty=parse_qty(data.get("qty") or 0), description=data.get("description", ""),
                                                action=data.get("action", "none"), created_by=request.user)
         audit.record("delivery_exception", "fg.dispatch", obj, changes={"kind": exc.kind, "qty": exc.qty, "action": exc.action})
         notify_perm("quality.complaint.create", f"Delivery {exc.get_kind_display()} on {obj.doc_no}", severity="warning", resource="fg.dispatch",

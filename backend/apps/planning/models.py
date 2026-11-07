@@ -8,6 +8,7 @@ instruction for one machine / 12-hour shift with recipe & artwork snapshots.
 from django.conf import settings
 from django.db import models
 
+from apps.core.fields import QtyField
 from apps.core.models import BaseRecord, DocumentRecord, ShiftLock
 from apps.masters.models import Artwork, Item, Machine, Mould, ProductComponent, Recipe
 
@@ -38,17 +39,17 @@ class PlanLine(BaseRecord):
     artwork = models.ForeignKey(Artwork, null=True, blank=True, on_delete=models.PROTECT)
     machine = models.ForeignKey(Machine, on_delete=models.PROTECT, related_name="plan_lines")
     mould = models.ForeignKey(Mould, on_delete=models.PROTECT, related_name="plan_lines")
-    sequence = models.PositiveIntegerField(default=10, help_text="Order on the machine; drives forecast start/finish")
-    planned_qty = models.PositiveIntegerField("Good qty target")
+    sequence = QtyField(default=10, help_text="Order on the machine; drives forecast start/finish")
+    planned_qty = QtyField("Good qty target")
     expected_yield_pct = models.DecimalField(max_digits=5, decimal_places=2, default=100)
     cycle_s = models.DecimalField("Planning cycle (s)", max_digits=6, decimal_places=2)
-    active_cavities = models.PositiveSmallIntegerField()
-    setup_minutes = models.PositiveIntegerField(default=0)
+    active_cavities = QtyField()
+    setup_minutes = QtyField(default=0)
     earliest_start = models.DateTimeField(null=True, blank=True)
     forecast_start = models.DateTimeField(null=True, blank=True)
     forecast_finish = models.DateTimeField(null=True, blank=True)
     # Baseline frozen at plan approval
-    baseline_qty = models.PositiveIntegerField(null=True, blank=True)
+    baseline_qty = QtyField(null=True, blank=True)
     baseline_cycle_s = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     baseline_finish = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUS, default="planned", db_index=True)
@@ -92,8 +93,8 @@ class ProductionRequest(DocumentRecord):
     shift = models.CharField(max_length=5, choices=SHIFTS)
     segment_start = models.DateTimeField()
     segment_end = models.DateTimeField()
-    planned_pcs = models.PositiveIntegerField("Planned moulded pcs")
-    active_cavities = models.PositiveSmallIntegerField()
+    planned_pcs = QtyField("Planned moulded pcs")
+    active_cavities = QtyField()
     cycle_s = models.DecimalField(max_digits=6, decimal_places=2)
     snapshot = models.JSONField(default=dict, help_text="Recipe/artwork/packing snapshot frozen at release")
     readiness = models.JSONField(default=dict, blank=True)
